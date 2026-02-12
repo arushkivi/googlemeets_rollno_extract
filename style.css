@@ -1,0 +1,33 @@
+/* Floating button style */
+.meet-roll-call-btn {
+  position: fixed !important;
+  bottom: 120px !important;
+  left: 20px !important;
+  z-index: 99999 !important;
+  width: 48px !important;
+  height: 48px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background-color: #1a73e8 !important; /* Google blue */
+  color: white !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  transition: transform 0.2s, box-shadow 0.2s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transform: translateZ(0) !important; /* Hardware acceleration hint */
+}
+
+.meet-roll-call-btn:hover {
+  background-color: #1557b0;
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.meet-roll-call-btn svg {
+  width: 24px !important;
+  height: 24px !important;
+  fill: currentColor !important;
+}
