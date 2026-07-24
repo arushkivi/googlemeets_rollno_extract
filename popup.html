@@ -56,6 +56,17 @@
       </div>
     </div>
 
+    <!-- Auto-Admit Feature Toggle -->
+    <div class="section-card" style="border: 1px solid rgba(138, 180, 248, 0.3); background: rgba(138, 180, 248, 0.05);">
+      <div class="checkbox-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="popup-autoadmit-toggle">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label" style="font-weight: 700; color: #8ab4f8; font-size: 13px;">⚡ Auto-Admit Participants</span>
+      </div>
+    </div>
+
     <!-- Pattern Mode Toggle (30s Window) -->
     <div class="section-card">
       <div class="section-title">🔀 Attendance Pattern Mode (30s Window)</div>
@@ -69,16 +80,16 @@
       <div class="section-title">⚙️ Radar Settings</div>
       <div class="form-group">
         <label for="popup-roll-nums">My Roll Numbers (Comma Separated)</label>
-        <input type="text" id="popup-roll-nums" placeholder="e.g. 59, fifty nine, 59A">
+        <input type="text" id="popup-roll-nums" placeholder="e.g. 10, 11, 12">
       </div>
       <div class="form-row">
         <div class="form-group flex-1">
           <label for="popup-strike-min">Strike Min</label>
-          <input type="number" id="popup-strike-min" placeholder="55">
+          <input type="number" id="popup-strike-min" placeholder="Min">
         </div>
         <div class="form-group flex-1">
           <label for="popup-strike-max">Strike Max</label>
-          <input type="number" id="popup-strike-max" placeholder="60">
+          <input type="number" id="popup-strike-max" placeholder="Max">
         </div>
       </div>
       <div class="checkbox-row">

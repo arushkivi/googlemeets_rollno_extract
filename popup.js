@@ -1,11 +1,12 @@
 // popup.js - Extension Popup Logic & Content Script Synchronizer
 
 let currentSettings = {
-  myRollNumbers: ["59", "fifty nine", "fifty-nine"],
-  strikeMin: 55,
-  strikeMax: 60,
+  myRollNumbers: [],
+  strikeMin: "",
+  strikeMax: "",
   enableSound: true,
   enablePopup: true,
+  enableAutoAdmit: false,
   patternMode: 'sequential'
 };
 
@@ -99,11 +100,13 @@ function loadSavedSettings() {
         currentSettings = { ...currentSettings, ...result.meet_attendance_settings };
       }
       
-      document.getElementById('popup-roll-nums').value = currentSettings.myRollNumbers.join(', ');
-      document.getElementById('popup-strike-min').value = currentSettings.strikeMin;
-      document.getElementById('popup-strike-max').value = currentSettings.strikeMax;
+      document.getElementById('popup-roll-nums').value = (currentSettings.myRollNumbers || []).join(', ');
+      document.getElementById('popup-strike-min').value = currentSettings.strikeMin !== undefined && currentSettings.strikeMin !== null ? currentSettings.strikeMin : '';
+      document.getElementById('popup-strike-max').value = currentSettings.strikeMax !== undefined && currentSettings.strikeMax !== null ? currentSettings.strikeMax : '';
       document.getElementById('popup-sound-toggle').checked = currentSettings.enableSound;
       document.getElementById('popup-modal-toggle').checked = currentSettings.enablePopup;
+      const admitToggle = document.getElementById('popup-autoadmit-toggle');
+      if (admitToggle) admitToggle.checked = !!currentSettings.enableAutoAdmit;
       updatePatternUI(currentSettings.patternMode);
     });
   }
@@ -113,18 +116,23 @@ function loadSavedSettings() {
 async function saveSettings() {
   const rawRolls = document.getElementById('popup-roll-nums').value;
   const rolls = rawRolls.split(',').map(s => s.trim()).filter(Boolean);
-  const minVal = parseInt(document.getElementById('popup-strike-min').value) || 55;
-  const maxVal = parseInt(document.getElementById('popup-strike-max').value) || 60;
+  const minRaw = document.getElementById('popup-strike-min').value.trim();
+  const maxRaw = document.getElementById('popup-strike-max').value.trim();
+  const minVal = minRaw !== "" ? (parseInt(minRaw) || "") : "";
+  const maxVal = maxRaw !== "" ? (parseInt(maxRaw) || "") : "";
   const soundOn = document.getElementById('popup-sound-toggle').checked;
   const popupOn = document.getElementById('popup-modal-toggle').checked;
+  const admitToggle = document.getElementById('popup-autoadmit-toggle');
+  const admitOn = admitToggle ? admitToggle.checked : false;
 
   currentSettings = {
     ...currentSettings,
-    myRollNumbers: rolls.length ? rolls : ["59"],
+    myRollNumbers: rolls,
     strikeMin: minVal,
     strikeMax: maxVal,
     enableSound: soundOn,
-    enablePopup: popupOn
+    enablePopup: popupOn,
+    enableAutoAdmit: admitOn
   };
 
   chrome.storage.local.set({ meet_attendance_settings: currentSettings }, () => {
@@ -246,4 +254,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save settings button
   document.getElementById('btn-save-settings').onclick = () => saveSettings();
+
+  // Auto-admit toggle immediate feedback listener
+  const autoadmitToggle = document.getElementById('popup-autoadmit-toggle');
+  if (autoadmitToggle) {
+    autoadmitToggle.onchange = () => {
+      saveSettings();
+      showPopupToast(autoadmitToggle.checked ? "⚡ Auto-Admit Enabled!" : "⚡ Auto-Admit Disabled!");
+    };
+  }
 });

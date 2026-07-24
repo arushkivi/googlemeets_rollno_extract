@@ -5,13 +5,14 @@ const extractedData = new Map();
 
 // Configuration Defaults
 let userSettings = {
-  myRollNumbers: ["59", "fifty nine", "fifty-nine"],
-  strikeMin: 55,
-  strikeMax: 60,
+  myRollNumbers: [],
+  strikeMin: "",
+  strikeMax: "",
   cooldownTime: 30000,
   warningCooldown: 60000,
   enableSound: true,
   enablePopup: false,
+  enableAutoAdmit: false,
   patternMode: 'sequential' // 'sequential' or 'scrambled'
 };
 
@@ -604,6 +605,36 @@ function getHostNames() {
   return hosts;
 }
 
+// --- AUTO-ADMIT PARTICIPANTS ENGINE ---
+function checkAndAutoAdmit() {
+  if (!userSettings.enableAutoAdmit) return;
+
+  try {
+    // 1. Primary "Admit" button lookup by Google Meet jsname attribute "USyMUd"
+    const admitBtns = document.querySelectorAll('[jsname="USyMUd"]');
+    admitBtns.forEach(btn => {
+      if (btn && typeof btn.click === 'function') {
+        btn.click();
+        console.log("%c[Auto-Admit] Admitted participant via USyMUd!", "color: #00ff00; font-weight: bold;");
+      }
+    });
+
+    // 2. Fallback search for buttons or spans containing text "Admit" or "Admit all"
+    const candidates = document.querySelectorAll('button, span[role="button"], div[role="button"], span');
+    candidates.forEach(el => {
+      const text = (el.innerText || el.textContent || '').trim();
+      if (text === 'Admit' || text === 'Admit all') {
+        if (typeof el.click === 'function') {
+          el.click();
+          console.log("%c[Auto-Admit] Clicked " + text, "color: #00ff00; font-weight: bold;");
+        }
+      }
+    });
+  } catch (e) {
+    console.warn("Auto-Admit error:", e);
+  }
+}
+
 setInterval(() => {
   if (!isInActiveCall()) {
     globalNumbers.clear();
@@ -612,6 +643,7 @@ setInterval(() => {
   }
   scanChatMessages();
   scanParticipants();
+  checkAndAutoAdmit();
 }, 1000);
 
 // --- EXPORT IN FILES (CSV & EXCEL XLS) ---
