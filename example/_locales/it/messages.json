@@ -1,0 +1,15 @@
+{
+  "name": {
+    "message": "Lista di partecipazione a Google Meet"
+  },
+  "short_name": {
+    "message": "GMAL"
+  },
+  "description": {
+    "message": "Il modo più semplice per salvare la lista di partecipazione per le tue riunioni o lezioni"
+  },
+
+	"save_attendants_btn": {
+		"message": "Salva i partecipanti"
+	}
+}

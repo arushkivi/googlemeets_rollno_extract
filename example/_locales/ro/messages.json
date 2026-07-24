@@ -1,0 +1,15 @@
+{
+  "name": {
+    "message": "Lista de prezență Google Meet"
+  },
+  "short_name": {
+    "message": "GMAL"
+  },
+  "description": {
+    "message": "Cea mai simplă modalitate de a salva lista de prezență pentru întâlnirile sau clasele tale"
+  },
+
+	"save_attendants_btn": {
+		"message": "Salveazaă participanții"
+	}
+}

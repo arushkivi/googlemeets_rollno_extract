@@ -1,0 +1,350 @@
+/* Google Meet Auto-Attendance Popup Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 360px;
+  background-color: #1c1d20;
+  color: #e8eaed;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.popup-container {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.header-title-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon {
+  width: 22px;
+  height: 22px;
+  fill: #8ab4f8;
+}
+
+.popup-header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.online {
+  background-color: #00e676;
+  box-shadow: 0 0 8px #00e676;
+}
+
+.status-dot.offline {
+  background-color: #9aa0a6;
+}
+
+/* Stats Row */
+.stats-row {
+  display: flex;
+  gap: 10px;
+}
+
+.stat-card {
+  flex: 1;
+  background: #282a2d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 11px;
+  color: #9aa0a6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #8ab4f8;
+  margin-top: 2px;
+}
+
+/* Section Cards */
+.section-card {
+  background: #242629;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #bdc1c6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Buttons Grid */
+.action-buttons-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-copy {
+  background-color: #0f9d58;
+  color: #ffffff;
+}
+
+.btn-copy:hover {
+  background-color: #0b8043;
+  box-shadow: 0 4px 12px rgba(15, 157, 88, 0.3);
+}
+
+.btn-primary {
+  background-color: #1a73e8;
+  color: #ffffff;
+  flex: 1;
+}
+
+.btn-primary:hover {
+  background-color: #1557b0;
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+}
+
+.btn-excel {
+  background-color: #107c41;
+  color: #ffffff;
+  flex: 1;
+}
+
+.btn-excel:hover {
+  background-color: #0b5c30;
+  box-shadow: 0 4px 12px rgba(16, 124, 65, 0.3);
+}
+
+.btn-save {
+  background-color: #3c4043;
+  color: #ffffff;
+  margin-top: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-save:hover {
+  background-color: #1a73e8;
+  border-color: #1a73e8;
+}
+
+/* Pattern Mode Single Toggle Button */
+.btn-pattern-toggle {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-pattern-toggle.sequential {
+  background-color: #1a73e8;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+}
+
+.btn-pattern-toggle.sequential:hover {
+  background-color: #1557b0;
+}
+
+.btn-pattern-toggle.scrambled {
+  background-color: #9c27b0;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
+}
+
+.btn-pattern-toggle.scrambled:hover {
+  background-color: #7b1fa2;
+}
+
+/* Form inputs */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 11px;
+  color: #9aa0a6;
+  font-weight: 600;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"] {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1c1d20;
+  border: 1px solid #3c4043;
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+}
+
+.form-group input:focus {
+  border-color: #8ab4f8;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* Toggle Switches */
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.toggle-label {
+  font-size: 12px;
+  color: #e8eaed;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #3c4043;
+  transition: .2s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #1a73e8;
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+/* Toast Notification inside Popup */
+.popup-toast {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(30px);
+  background: #323232;
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 999;
+}
+
+.popup-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

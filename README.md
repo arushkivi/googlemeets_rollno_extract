@@ -1,63 +1,53 @@
-# Google Meet Roll Call Extractor
+# Google Meet Roll Call Extractor & Auto-Attendance Radar (Silent Mode)
 
-A powerful Chrome extension designed to streamline attendance taking in Google Meet. It automatically extracts student names and their roll numbers from the chat, filters out the meeting host, and provides a comprehensive CSV download.
+A powerful, 100% silent Chrome extension for Google Meet that extracts roll calls from chat, filters host messages, provides clean CSV and Excel exports, and alerts you via audio chime / push notifications — **without cluttering or showing anything on the webpage DOM!**
 
-## 🚀 Features
+---
 
-- **Automated Extraction**: Scans the chat for roll numbers and associates them with the sender's name.
-- **Smart Filtering**: Automatically attempts to identify and exclude the meeting host from the attendance list.
-- **Duplicate Handling**: Handles cases where a student sends their roll number multiple times or sends multiple numbers.
-- **CSV Export**: Downloads a clean, sorted CSV file containing:
-  - Serial Number
-  - Student Name (Sorted)
-  - Roll Number(s)
-  - **Notes Column**: Flags students who have entered multiple different roll numbers.
-  - **Bulk List**: A comma-separated list of all roll numbers in the first row for easy copying.
-- **Auto-Open Chat**: If the chat sidebar is closed, the extension automatically opens it to ensure all latest messages are captured before downloading.
-- **Privacy Focused**: Runs entirely locally in your browser. No data is sent to external servers.
+## ✨ Features
 
-## 📥 Installation Guide
+- **🤫 100% Silent On-Page Operation**:
+  - Nothing is rendered on the Google Meet webpage (no floating toolbars, no pop-up modals, no toasts).
+  - All controls, status counters, and options are accessed cleanly by clicking the **Extension Icon** in the Chrome toolbar.
+- **🧩 Extension Toolbar Popup Menu (`popup.html`)**:
+  - Real-time student & roll call count indicators.
+  - 1-click **Copy All Roll Calls (`1,2,3,4...`)**.
+  - 1-click **Export CSV (`.csv`)** and **Export Excel (`.xls`)** buttons.
+  - Single 1-click toggle button for **Attendance Pattern Mode (30s Window)**:
+    - **`🔢 Sequential Mode (52, 53, 54...)`**
+    - **`🔀 Scrambled Mode (Random / Unordered)`**
+  - Radar settings: target roll numbers, strike zone min/max, audio chime alert toggles.
+- **🚨 Silent Radar Alerts**:
+  - Web Audio API chime sound alerts so you never miss your turn.
+  - Desktop push notifications (`Notification` API).
+- **🛡️ Strict Container Radar**:
+  - Blindfolds clock numbers and generic Google Meet UI text. Strictly monitors only Captions (`[aria-label="Captions"]`) and Chat messages (`aside`, `[aria-live="polite"]`).
 
-1.  **Download the Code**:
-    - Clone this repository or download the ZIP file and extract it to a folder on your computer.
+---
 
-2.  **Open Chrome Extensions**:
-    - Open Google Chrome (or Microsoft Edge/Brave).
-    - Navigate to `chrome://extensions` in the address bar.
+## 📥 Installation
 
-3.  **Enable Developer Mode**:
-    - Toggle the **"Developer mode"** switch in the top-right corner of the Extensions page.
+1. **Clone or Download** this repository folder.
+2. Open Chrome and navigate to `chrome://extensions`.
+3. Enable **Developer mode** in the top-right corner.
+4. Click **Load unpacked** and select this directory.
 
-4.  **Load the Extension**:
-    - Click the **"Load unpacked"** button.
-    - Select the folder where you saved/extracted the extension files (the folder containing `manifest.json`).
+---
 
-5.  **Pin it (Optional)**:
-    - The extension works automatically on Google Meet, but you can pin it for easy access to permissions if needed.
+## 🛠️ Usage
 
-## 🛠️ How to Use
+1. Join a **Google Meet**.
+2. Click the **Extension Icon** in your Chrome toolbar to open the control menu:
+   - **📋 Copy All Roll Calls**: Copies sorted `1,2,3,4...` roll call string directly to clipboard.
+   - **📥 CSV**: Export complete attendance report as a `.csv` file.
+   - **📊 XLS**: Export formatted attendance report as a Microsoft Excel `.xls` spreadsheet.
+   - **🔢 SEQ / 🔀 SCR**: Toggle between Sequential and Scrambled pattern modes.
+   - **⚙️ Settings**: Configure target roll number(s), strike zone, and alert sounds.
+3. The page remains completely clean and untouched!
 
-1.  **Join a Google Meet**: Start or join your class/meeting as usual.
-2.  **Wait for Roll Calls**: Ask students to type their roll numbers in the chat box.
-    - _Note: It's best practice to keep the chat open, but the extension will try to open it if you forgot._
-3.  **Click the button**:
-    - Look for the **Blue Circle Button** with a checkmark icon in the bottom-left corner of the screen.
-    - Click it.
-4.  **Download Attendance**:
-    - The extension will scan the chat, process the data, and automatically download a file named `MeetingName_Attendance_YYYY-MM-DD.csv`.
+---
 
-## 📄 Output Format
+## 📄 Output Formats
 
-The downloaded CSV file contains the following columns:
-
-| Column                      | Description                                                                                                          |
-| :-------------------------- | :------------------------------------------------------------------------------------------------------------------- |
-| **Serial No.**              | A simple counter (1, 2, 3...)                                                                                        |
-| **Student Name**            | The name of the attendee as it appears in Google Meet.                                                               |
-| **Roll Number**             | The extracted roll number(s).                                                                                        |
-| **Notes**                   | Warnings (e.g., "⚠️ Multiple Rolls Found") if a student entered conflicting data.                                    |
-| **All Roll Numbers (Bulk)** | (In the first row only) A compiled, sorted list of **all** roll numbers present in the meeting, separated by commas. |
-
-## 🤝 Contributing
-
-Feel free to fork this project and submit pull requests if you have ideas for improvements!
+- **Copied Roll Numbers**: `1,2,3,4,5,6,7,8,9,10...`
+- **CSV & Excel Columns**: `Serial No.`, `Student Name`, `Roll Number`, `Notes`, `All Roll Numbers (Bulk)`

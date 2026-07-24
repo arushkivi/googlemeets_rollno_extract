@@ -1,0 +1,220 @@
+{
+  "name": {
+    "message": "Lista de asistencia de Google Meet"
+  },
+  "short_name": {
+    "message": "GMAL"
+  },
+  "description": {
+    "message": "La forma más fácil de guardar la lista de asistencia para sus reuniones o conferencias"
+  },
+
+	"save_attendants_btn": {
+		"message": "Guardar participantes"
+	},
+  "popup_auto_attendance": {
+    "message": "Asistencia automática"
+  },
+  "popup_auto_attendance_off_notice": {
+    "message": "APAGADO"
+  },
+  "popup_auto_attendance_description": {
+    "message": "Se abrirá una nueva pestaña al final de la reunión, mostrando los resultados"
+  },
+  "popup_open_history_btn": {
+    "message": "Abrir Historial de Reuniones"
+  },
+
+
+  "premium_title": {
+    "message": "Membresia premium"
+  },
+  "premium_paragraph1": {
+    "message": "Eliminamos el trabajo de sus reuniones para que pueda lograr más."
+  },
+  "premium_features_header": {
+    "message": "What's included"
+  },
+  "premium_feature1": {
+    "message": "Qué está incluido"
+  },
+  "premium_feature2": {
+    "message": "Copia de seguridad de reuniones en la nube"
+  },
+  "premium_feature3": {
+    "message": "Acceder al historial desde múltiples dispositivos"
+  },
+  "premium_feature4": {
+    "message": "Atención al cliente prioritaria"
+  },
+  "premium_feature5": {
+    "message": "Exportar como XLSX, CSV y PDF"
+  },
+  "premium_feature_others": {
+    "message": "Muchos otros"
+  },
+  "premium_cta_text": {
+    "message": "Hazte premium"
+  },
+  "premium_small_text": {
+    "message": "Se le pedirá que conecte su cuenta de Google en este paso."
+  },
+
+
+  "options_menu_meetings": {
+    "message": "Reuniones"
+  },
+  "options_menu_feedback": {
+    "message": "Retroalimentación"
+  },
+  "options_menu_preferences": {
+    "message": "Preferencias"
+  },
+  "options_meetings_history": {
+    "message": "Historial de Reuniones"
+  },
+  "options_no_meetings_found": {
+    "message": "No se encontró el historial de reuniones."
+  },
+  "options_table_header_name": {
+    "message": "Nombre del evento"
+  },
+  "options_table_header_participant_name": {
+    "message": "Nombre"
+  },
+  "options_table_header_date": {
+    "message": "Fecha"
+  },
+  "options_table_header_attendees": {
+    "message": "Asistentes"
+  },
+  "options_table_header_duration": {
+    "message": "Duración"
+  },
+  "options_table_header_first_seen": {
+    "message": "Visto por primera vez a las"
+  },
+  "options_table_header_time_in_call": {
+    "message": "Tiempo en la llamada"
+  },
+  "options_show_more_btn": {
+    "message": "Mostrar más"
+  },
+  "options_view_participants_btn": {
+    "message": "Ver participantes"
+  },
+  "options_edit_btn": {
+    "message": "Editar"
+  },
+  "options_edit_meeting_name": {
+    "message": "Nombre de la reunión"
+  },
+  "options_delete_all_history_btn": {
+    "message": "Eliminar todo el historial"
+  },
+  "options_meeting_modal_title": {
+    "message": "Participantes de la reunión"
+  },
+  "options_meeting_modal_description": {
+    "message": "La lista de asistentes de \u003Cstrong>$NAME$\u003C/strong> de \u003Cstrong>$DATE$\u003C/strong>. Puede descargar una copia del informe en formato CSV.",
+    "placeholders": {
+      "name" : {
+        "content" : "$1",
+        "example" : "Awesome meeting"
+      },
+      "date" : {
+        "content" : "$2",
+        "example" : "Jun 10, 2021 7:00 PM"
+      }
+    }
+  },
+  "options_export_csv_btn": {
+    "message": "Exportar como CSV"
+  },
+  "options_export_pdf_btn": {
+    "message": "Exportar como PDF"
+  },
+  "options_delete_modal_title": {
+    "message": "¿Estas seguro?"
+  },
+  "options_delete_modal_description": {
+    "message": "¡Advertencia! Esta acción no se puede deshacer. ¿Está seguro de que desea eliminar la reunión \u003Cstrong>$NAME$\u003C/strong> de \u003Cstrong>$DATE$\u003C/strong>?",
+    "placeholders": {
+      "name" : {
+        "content" : "$1",
+        "example" : "Awesome meeting"
+      },
+      "date" : {
+        "content" : "$2",
+        "example" : "Jun 10, 2021 7:00 PM"
+      }
+    }
+  },
+  "options_delete_all_modal_description": {
+    "message": "\u003Cstrong>¡Advertencia! Esta acción no se puede deshacer.</strong> Perderá todas las reuniones guardadas hasta el momento. ¿Está seguro de que desea eliminar todo el historial de reuniones?"
+  },
+  "options_edit_modal_title": {
+    "message": "Renombrar Reunion"
+  },
+  "options_edit_modal_description": {
+    "message": "Los cambios en el nombre de la reunión se reflejarán en la tabla del historial de reuniones y en los archivos descargados."
+  },
+  "modal_delete_btn": {
+    "message": "Borrar"
+  },
+  "modal_delete_all_btn": {
+    "message": "Borrar todo"
+  },
+  "modal_save_btn": {
+    "message": "Guardar"
+  },
+  "modal_cancel_btn": {
+    "message": "Cancelar"
+  },
+
+
+  "settings_date_time_title": {
+    "message": "Fecha y hora"
+  },
+  "settings_time_format_title": {
+    "message": "Formato de tiempo"
+  },
+  "settings_time_format_description": {
+    "message": "Utilice un formato de reloj de 24 horas."
+  },
+  "settings_attendance_report_title": {
+    "message": "Reporte de asistencia"
+  },
+  "settings_attendance_popup_title": {
+    "message": "Ventana emergente de informe de asistencia"
+  },
+  "settings_attendance_popup_description": {
+    "message": "Abriremos una nueva pestaña con la asistencia, justo después de que termine la reunión."
+  },
+  "settings_auto_attendance_title": {
+    "message": "Asistencia automática"
+  },
+  "settings_auto_attendance_description": {
+    "message": "Realice un seguimiento de quién se une o abandona sus reuniones, automáticamente."
+  },
+
+
+  "updates_up_to_date": {
+    "message": "¡está actualizado"
+  },
+  "updates_latest_changes": {
+    "message": "Últimos cambios"
+  },
+  "updates_enjoying_app": {
+    "message": "¿Disfrutas de"
+  },
+  "updates_consider_supporting": {
+    "message": "Considera apoyarnos con una de las siguientes maneras"
+  },
+  "updates_rate_btn": {
+    "message": "Rate us"
+  },
+  "updates_rate_description": {
+    "message": "Tómese un momento y ayude a difundir Google Meet Attendance List, calificandolo. ¡Es rápido y gratis!"
+  }
+}

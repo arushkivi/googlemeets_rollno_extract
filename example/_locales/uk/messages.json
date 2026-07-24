@@ -1,0 +1,220 @@
+{
+  "name": {
+    "message": "Список присутності в Google Meet"
+  },
+  "short_name": {
+    "message": "GMAL"
+  },
+  "description": {
+    "message": "Найпростіший спосіб зберегти список присутніх на вашій зустрічі або лекції"
+  },
+
+  "save_attendants_btn": {
+    "message": "Записати присутніх"
+  },
+  "popup_auto_attendance": {
+    "message": "Автоматична відвідуваність"
+  },
+  "popup_auto_attendance_off_notice": {
+    "message": "ВИМК"
+  },
+  "popup_auto_attendance_description": {
+    "message": "Після закінчення зустрічі відкриється нова вкладка з результатами"
+  },
+  "popup_open_history_btn": {
+    "message": "Відкрити історію зустрічей"
+  },
+
+
+  "premium_title": {
+    "message": "Преміум-членство"
+  },
+  "premium_paragraph1": {
+    "message": "Ми віднімаємо роботу зі ваших зустрічей, щоб ви могли досягти більше."
+  },
+  "premium_features_header": {
+    "message": "Що входить"
+  },
+  "premium_feature1": {
+    "message": "Автоматичний запис відвідуваності"
+  },
+  "premium_feature2": {
+    "message": "Резервне копіювання зустрічей у хмарі"
+  },
+  "premium_feature3": {
+    "message": "Доступ до історії зустрічей з кількох пристроїв"
+  },
+  "premium_feature4": {
+    "message": "Пріоритетне обслуговування клієнтів"
+  },
+  "premium_feature5": {
+    "message": "Експорт у форматах XLSX, CSV та PDF"
+  },
+  "premium_feature_others": {
+    "message": "Багато інших"
+  },
+  "premium_cta_text": {
+    "message": "Отримати Преміум"
+  },
+  "premium_small_text": {
+    "message": "В цьому кроці вас попросять підключити ваш обліковий запис Google."
+  },
+
+
+  "options_menu_meetings": {
+    "message": "Зустрічі"
+  },
+  "options_menu_feedback": {
+    "message": "Зворотний зв'язок"
+  },
+  "options_menu_preferences": {
+    "message": "Уподобання"
+  },
+  "options_meetings_history": {
+    "message": "Історія зустрічей"
+  },
+  "options_no_meetings_found": {
+    "message": "Історія зустрічей не знайдена."
+  },
+  "options_table_header_name": {
+    "message": "Назва"
+  },
+  "options_table_header_participant_name": {
+    "message": "Iм'я"
+  },
+  "options_table_header_date": {
+    "message": "Дата"
+  },
+  "options_table_header_attendees": {
+    "message": "Учасники"
+  },
+  "options_table_header_duration": {
+    "message": "Тривалість"
+  },
+  "options_table_header_first_seen": {
+    "message": "Перший раз було побачено"
+  },
+  "options_table_header_time_in_call": {
+    "message": "Час в розмові"
+  },
+  "options_show_more_btn": {
+    "message": "Показати більше"
+  },
+  "options_view_participants_btn": {
+    "message": "Перегляд учасників"
+  },
+  "options_edit_btn": {
+    "message": "Редагувати"
+  },
+  "options_edit_meeting_name": {
+    "message": "Назва зустрічі"
+  },
+  "options_delete_all_history_btn": {
+    "message": "Видалити всю історію"
+  },
+  "options_meeting_modal_title": {
+    "message": "Учасники зустрічі"
+  },
+  "options_meeting_modal_description": {
+    "message": "Список учасників для \u003Cstrong>$NAME$\u003C/strong> з \u003Cstrong>$DATE$\u003C/strong>. Ви можете завантажити звіт у форматі CSV.",
+    "placeholders": {
+      "name" : {
+        "content" : "$1",
+        "example" : "Awesome meeting"
+      },
+      "date" : {
+        "content" : "$2",
+        "example" : "Jun 10, 2021 7:00 PM"
+      }
+    }
+  },
+  "options_export_csv_btn": {
+    "message": "Експорт як CSV"
+  },
+  "options_export_pdf_btn": {
+    "message": "Експорт як PDF"
+  },
+  "options_delete_modal_title": {
+    "message": "Ви впевнені?"
+  },
+  "options_delete_modal_description": {
+    "message": "Увага! Ця дія не може бути відмінена. Ви впевнені, що хочете видалити зустріч \u003Cstrong>$NAME$\u003C/strong> з \u003Cstrong>$DATE$\u003C/strong>?",
+    "placeholders": {
+      "name" : {
+        "content" : "$1",
+        "example" : "Awesome meeting"
+      },
+      "date" : {
+        "content" : "$2",
+        "example" : "Jun 10, 2021 7:00 PM"
+      }
+    }
+  },
+  "options_delete_all_modal_description": {
+    "message": "\u003Cstrong>Увага! Ця дія не може бути відмінена.</strong> Ви впевнені, що хочете видалити всю історію збережених зустрічей?"
+  },
+  "options_edit_modal_title": {
+    "message": "Оновити зустріч"
+  },
+  "options_edit_modal_description": {
+    "message": "Зміни назви зустрічі будуть відображені в таблиці історії зустрічей та в завантажених файлах."
+  },
+  "modal_delete_btn": {
+    "message": "Видалити"
+  },
+  "modal_delete_all_btn": {
+    "message": "Видалити все"
+  },
+  "modal_save_btn": {
+    "message": "Зберегти"
+  },
+  "modal_cancel_btn": {
+    "message": "Скасувати"
+  },
+
+
+  "settings_date_time_title": {
+    "message": "Дата і час"
+  },
+  "settings_time_format_title": {
+    "message": "Формат часу"
+  },
+  "settings_time_format_description": {
+    "message": "Використовуйте формат годинника 24 години."
+  },
+  "settings_attendance_report_title": {
+    "message": "Звіт про відвідуваність"
+  },
+  "settings_attendance_popup_title": {
+    "message": "Спливаюче вікно звіту про відвідуваність"
+  },
+  "settings_attendance_popup_description": {
+    "message": "Ми відкриємо нову вкладку з присутністю, одразу після закінчення зустрічі."
+  },
+  "settings_auto_attendance_title": {
+    "message": "Автоматична присутність"
+  },
+  "settings_auto_attendance_description": {
+    "message": "Автоматично відстежуйте, хто приєднується або покидає ваші зустрічі."
+  },
+
+
+  "updates_up_to_date": {
+    "message": "Оновлено"
+  },
+  "updates_latest_changes": {
+    "message": "Останні зміни"
+  },
+  "updates_enjoying_app": {
+    "message": "Насолоджуватися"
+  },
+  "updates_consider_supporting": {
+    "message": "Розгляньте можливість підтримати нас одним з двох способів"
+  },
+  "updates_rate_btn": {
+    "message": "Оцініть нас"
+  },
+  "updates_rate_description": {
+    "message": "Будь ласка, знайдіть хвилину і допоможіть розповсюдити інформацію, оцінивши Google Meet Attendance List. Це швидко та безкоштовно!"
+  }
+}

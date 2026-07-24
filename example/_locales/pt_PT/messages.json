@@ -1,0 +1,15 @@
+{
+  "name": {
+    "message": "Lista de presenças do Google Meet"
+  },
+  "short_name": {
+    "message": "GMAL"
+  },
+  "description": {
+    "message": "Forma mais fácil de guardar a lista de presenças das suas reuniões ou aulas"
+  },
+
+	"save_attendants_btn": {
+		"message": "Salvar participantes"
+	}
+}

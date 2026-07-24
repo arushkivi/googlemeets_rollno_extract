@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Meet Auto-Attendance</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="header-title-container">
+        <svg class="header-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <h1>Auto-Attendance Radar</h1>
+      </div>
+      <div class="status-indicator" id="status-indicator">
+        <span class="status-dot offline" id="status-dot"></span>
+        <span class="status-text" id="status-text">Checking Meet...</span>
+      </div>
+    </header>
+
+    <!-- Stats Chip Summary -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <span class="stat-label">Students</span>
+        <span class="stat-value" id="stat-students">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Roll Calls</span>
+        <span class="stat-value" id="stat-rolls">0</span>
+      </div>
+    </div>
+
+    <!-- Quick Export Actions -->
+    <div class="section-card">
+      <div class="section-title">📋 Copy & Export Actions</div>
+      <div class="action-buttons-grid">
+        <button class="btn btn-save" id="btn-auto-scan" style="background-color: #8ab4f8; color: #1c1d20; font-weight: 700;">
+          🔍 Auto-Scan Members & Chat
+        </button>
+        <button class="btn btn-copy" id="btn-copy-rolls">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copy All Roll Calls (1,2,3,4)
+        </button>
+        <div class="export-row">
+          <button class="btn btn-primary" id="btn-export-csv">
+            📥 Export CSV (.csv)
+          </button>
+          <button class="btn btn-excel" id="btn-export-xls">
+            📊 Export Excel (.xls)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pattern Mode Toggle (30s Window) -->
+    <div class="section-card">
+      <div class="section-title">🔀 Attendance Pattern Mode (30s Window)</div>
+      <button class="btn btn-pattern-toggle sequential" id="pattern-toggle-btn">
+        🔢 Sequential Mode (52, 53, 54...)
+      </button>
+    </div>
+
+    <!-- Auto-Attendance Settings -->
+    <div class="section-card">
+      <div class="section-title">⚙️ Radar Settings</div>
+      <div class="form-group">
+        <label for="popup-roll-nums">My Roll Numbers (Comma Separated)</label>
+        <input type="text" id="popup-roll-nums" placeholder="e.g. 59, fifty nine, 59A">
+      </div>
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label for="popup-strike-min">Strike Min</label>
+          <input type="number" id="popup-strike-min" placeholder="55">
+        </div>
+        <div class="form-group flex-1">
+          <label for="popup-strike-max">Strike Max</label>
+          <input type="number" id="popup-strike-max" placeholder="60">
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="popup-sound-toggle" checked>
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Play Audio Alert Chime</span>
+      </div>
+      <div class="checkbox-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="popup-modal-toggle" checked>
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Show On-Screen Pop-up Modal</span>
+      </div>
+      <button class="btn btn-save" id="btn-save-settings">
+        💾 Save & Apply Settings
+      </button>
+    </div>
+
+    <!-- Toast Notification in Popup -->
+    <div class="popup-toast" id="popup-toast"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

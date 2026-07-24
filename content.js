@@ -1,286 +1,749 @@
-// content.js - Google Meet Roll Call Extractor
+// content.js - Google Meet Roll Call Extractor & Auto-Attendance Radar (Silent Background Script)
 
-// State to store extracted data
-// Format: name -> Set of roll numbers
+// State to store extracted data (name -> Set of roll numbers)
 const extractedData = new Map();
 
-// Helper to clean and extract numbers
+// Configuration Defaults
+let userSettings = {
+  myRollNumbers: ["59", "fifty nine", "fifty-nine"],
+  strikeMin: 55,
+  strikeMax: 60,
+  cooldownTime: 30000,
+  warningCooldown: 60000,
+  enableSound: true,
+  enablePopup: false,
+  patternMode: 'sequential' // 'sequential' or 'scrambled'
+};
+
+// Load saved settings from chrome.storage
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  chrome.storage.local.get(['meet_attendance_settings'], (result) => {
+    if (result.meet_attendance_settings) {
+      userSettings = { ...userSettings, ...result.meet_attendance_settings };
+    }
+  });
+}
+
+// Cooldown tracking
+let lastSentTime = 0;
+let lastWarningTime = 0;
+
+// Radar memory
+let globalNumbers = new Set();
+let strikeZoneNumbers = new Set();
+let clearSetTimeout = null;
+
+// --- Web Audio API Chime Generator ---
+function playAlertSound(type = 'urgent') {
+  if (!userSettings.enableSound) return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    
+    if (type === 'urgent') {
+      const now = ctx.currentTime;
+      [0, 0.2, 0.4].forEach(delay => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, now + delay);
+        osc.frequency.exponentialRampToValueAtTime(1760, now + delay + 0.15);
+        gain.gain.setValueAtTime(0.3, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + delay + 0.15);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.15);
+      });
+    } else {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.3);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    }
+  } catch (e) {
+    console.warn("[Attendance System] Audio play failed:", e);
+  }
+}
+
+// Cleanup on tab unload/exit
+window.addEventListener('beforeunload', () => {
+  window.__meet_attendance_extension_disabled = true;
+  if (activeObserver) activeObserver.disconnect();
+  globalNumbers.clear();
+  strikeZoneNumbers.clear();
+});
+
+window.addEventListener('pagehide', () => {
+  window.__meet_attendance_extension_disabled = true;
+  if (activeObserver) activeObserver.disconnect();
+  globalNumbers.clear();
+  strikeZoneNumbers.clear();
+});
+
+// --- Push Notification Helper ---
+function sendPushNotification(title, body) {
+  if (window.__meet_attendance_extension_disabled) return;
+  if (!isInActiveCall()) return;
+
+  if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
+    try {
+      new Notification(title, { 
+        body: body,
+        icon: "https://www.gstatic.com/meet/app_icon_192.png", 
+        requireInteraction: false 
+      });
+    } catch (e) {
+      console.warn("[Attendance System] Notification error:", e);
+    }
+  }
+}
+
+// --- Helper to Extract Pure Roll Numbers from Text ---
 function extractNumbers(text) {
   if (!text) return [];
-  // Extract all digit sequences
-  const matches = text.match(/\d+/g);
+  // Strip Google Meet UI noise words (e.g. keepPin, pin, unmute, mic)
+  const cleaned = text.replace(/keepPin|keep pin|pin|unmute|mute|microphone|mic|more_vert|keyboard_arrow|contributors|participant|host|admin/gi, ' ');
+  
+  const matches = cleaned.match(/\b\d+\b/g);
   if (!matches) return [];
-  // Return distinct matches as strings, preserving leading zeros (e.g. "07")
-  // We use a Set to deduplicate within the single message immediately
-  return [...new Set(matches)];
+
+  // Only retain valid roll numbers (1 to 250)
+  const validNumbers = matches.filter(num => {
+    const val = parseInt(num, 10);
+    return val > 0 && val <= 250;
+  });
+
+  return [...new Set(validNumbers)];
 }
 
-// --- Main Extraction Logic ---
+// --- Helper to Compile Sorted Bulk Roll Call String (1,2,3,4 format) ---
+function getAllRollCallsString() {
+  const allRollsSet = new Set();
+  extractedData.forEach((data) => {
+    const rolls = data.rolls || (data instanceof Set ? data : new Set());
+    rolls.forEach(n => {
+      if (n && String(n).trim()) {
+        allRollsSet.add(String(n).trim());
+      }
+    });
+  });
 
+  const sorted = Array.from(allRollsSet).sort((a, b) => {
+    const numA = parseInt(a, 10);
+    const numB = parseInt(b, 10);
+    if (!isNaN(numA) && !isNaN(numB) && String(numA) === a && String(numB) === b) {
+      return numA - numB;
+    }
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return sorted.join(',');
+}
+
+// --- Copy Roll Calls to Clipboard ---
+function copyAllRollCallsToClipboard() {
+  const rollsStr = getAllRollCallsString();
+  if (!rollsStr) return;
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = rollsStr;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  } catch (err) {
+    console.warn("DOM copy fallback warning:", err);
+  }
+}
+
+// --- Active Meeting Call Guard ---
+function isInActiveCall() {
+  if (window.__meet_attendance_extension_disabled) return false;
+
+  const path = window.location.pathname.replace(/^\//, '').trim();
+  if (!path || path === 'landing' || path.startsWith('landing') || path === 'calling' || path.startsWith('exit') || path.startsWith('feedback')) {
+    return false;
+  }
+
+  const isMeetingCodeUrl = /^[a-z0-9]{3,4}-[a-z0-9]{3,4}-[a-z0-9]{3,4}/i.test(path);
+  const hasInCallControls = !!document.querySelector('[aria-label="Leave call"], button[aria-label*="Leave call"], [aria-label*="leave call"], button[aria-label*="leave call"]');
+
+  return isMeetingCodeUrl && hasInCallControls;
+}
+
+// --- SILENT ATTENDANCE ALERT TRIGGER (Audio & Push Only) ---
+function triggerAttendanceAlert(title, reason, type = 'urgent', matchedKeyword = null) {
+  if (!isInActiveCall()) return;
+
+  const now = Date.now();
+  if (type === 'urgent' && now - lastSentTime < userSettings.cooldownTime) return; 
+  if (type === 'warning' && now - lastWarningTime < userSettings.warningCooldown) return;
+
+  if (type === 'urgent') lastSentTime = now;
+  if (type === 'warning') lastWarningTime = now;
+
+  console.log(`%c[ATTENDANCE ALERT] ${title}: ${reason}`, "color: #00ff00; font-weight: bold; font-size: 14px;");
+
+  playAlertSound(type);
+  sendPushNotification(title, reason);
+}
+
+// --- RADAR ANALYZER & STRICT CONTAINER CHECK ---
+function isFromValidSource(node) {
+  if (!isInActiveCall()) return false;
+
+  let element = (node.nodeType === Node.TEXT_NODE) ? node.parentElement : node;
+  if (!element || !element.closest) return false;
+
+  // Ignore inputs, buttons, tooltips, counters, icons, and non-chat elements
+  if (element.closest('input, textarea, button, svg, img, script, style, [role="tooltip"], [aria-label="Participants"], .V6tdP, .MKVSQd, .d93U2d')) {
+    return false;
+  }
+
+  // Strictly allow actual chat messages or live caption elements
+  return !!element.closest('[aria-label="Captions"], [jsname="dTKtvb"], [data-message-text], [aria-live="polite"]');
+}
+
+function analyzeText(text) {
+  if (!isInActiveCall() || !text) return;
+  let cleanText = text.toLowerCase().trim();
+
+  // Filter out time strings like 12:43 or 09:15
+  if (/\b\d{1,2}:\d{2}\b/.test(cleanText)) return;
+
+  // Filter out Google Meet UI system strings & settings/exit page text
+  if (/contributors|meeting host|participants|in call|keyboard_arrow|more_vert|unmute|setting|settings|feedback|quality|rate/i.test(cleanText)) return;
+
+  cleanText = cleanText.replace("arrow_downward", "").replace("jump to the bottom", "").replace("you", "");
+  if (cleanText.length < 1) return;
+
+  let matchedKeyword = null;
+  const exactMatch = userSettings.myRollNumbers.some(num => {
+    if (!num || !num.trim()) return false;
+    const cleanNum = num.trim();
+    const escapedNum = cleanNum.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(^|\\W)${escapedNum}(\\W|$)`, 'i');
+    if (regex.test(cleanText)) {
+      matchedKeyword = cleanNum;
+      return true;
+    }
+    return false;
+  });
+
+  if (exactMatch && matchedKeyword) {
+    triggerAttendanceAlert(
+      "🚨 IT'S YOUR TURN!", 
+      `Matched keyword "${matchedKeyword}" in chat/captions! ("${cleanText}")`, 
+      'urgent',
+      matchedKeyword
+    );
+    return;
+  }
+
+  if (cleanText.length < 60) {
+    const digitsFound = cleanText.match(/\b\d+\b/g);
+    
+    if (digitsFound) {
+      digitsFound.forEach(digit => {
+        let val = parseInt(digit, 10);
+        if (val > 0 && val <= 150) {
+          globalNumbers.add(val);
+          
+          if (val >= userSettings.strikeMin && val <= userSettings.strikeMax) {
+            strikeZoneNumbers.add(val);
+          }
+        }
+      });
+
+      clearTimeout(clearSetTimeout);
+      clearSetTimeout = setTimeout(() => {
+        globalNumbers.clear();
+        strikeZoneNumbers.clear();
+      }, 30000);
+
+      const isScrambled = userSettings.patternMode === 'scrambled';
+      const requiredHits = isScrambled ? 1 : 2;
+
+      if (strikeZoneNumbers.size >= requiredHits) {
+        const hits = Array.from(strikeZoneNumbers).sort((a,b)=>a-b).join(', ');
+        const modeLabel = isScrambled ? 'Scrambled Pattern' : 'Sequential Pattern';
+        triggerAttendanceAlert("⚡ STRIKE ZONE HIT!", `Roll call detected in your strike range! (${modeLabel}) Saw: ${hits}`, 'urgent');
+        strikeZoneNumbers.clear();
+        globalNumbers.clear();
+        return;
+      }
+
+      const requiredRadarCount = isScrambled ? 3 : 4;
+      if (globalNumbers.size >= requiredRadarCount) {
+        const now = Date.now();
+        if (now - lastWarningTime > userSettings.warningCooldown) {
+          const hits = Array.from(globalNumbers).sort((a,b)=>a-b).join(', ');
+          const modeLabel = isScrambled ? 'Scrambled Pattern' : 'Sequential Pattern';
+          triggerAttendanceAlert("👀 Attendance Radar Active", `Roll call activity detected! (${modeLabel}) Saw numbers: ${hits}`, 'warning');
+        }
+      }
+    }
+  }
+}
+
+// --- Participant Name Sanitizer ---
+function cleanParticipantName(rawName) {
+  if (!rawName) return '';
+  return rawName
+    .replace(/\(You\)/gi, '')
+    .replace(/Meeting host/gi, '')
+    .replace(/keepPin|keep pin|pin|unmute|mute|microphone|mic|more_vert|keyboard_arrow_down|keyboard_arrow/gi, '')
+    .replace(/[\n\r\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// --- Time & Duration Format Helpers ---
+function formatTimeString(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '0m 0s';
+  const totalSecs = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours > 0) {
+    return `${hours}h ${remMins}m ${secs}s`;
+  }
+  return `${remMins}m ${secs}s`;
+}
+
+// --- Fuzzy & Case-Insensitive Participant Key Normalizer ---
+function findOrCreateParticipantKey(cleanName) {
+  if (!cleanName) return '';
+  const lowerNew = cleanName.toLowerCase().trim();
+
+  for (const existingKey of extractedData.keys()) {
+    const lowerExisting = existingKey.toLowerCase().trim();
+    if (lowerExisting === lowerNew) return existingKey;
+
+    // Match First Name + Last Name (e.g. "SATVIK SUNIL PATIL" <-> "Satvik Patil")
+    const wordsNew = lowerNew.split(/\s+/);
+    const wordsExist = lowerExisting.split(/\s+/);
+    if (wordsNew.length >= 2 && wordsExist.length >= 2) {
+      if (wordsNew[0] === wordsExist[0] && wordsNew[wordsNew.length - 1] === wordsExist[wordsExist.length - 1]) {
+        return existingKey;
+      }
+    }
+  }
+
+  return cleanName;
+}
+
+// --- Central Participant State Tracker ---
+function recordParticipantState(rawCleanName, extractedRoll = null) {
+  const now = Date.now();
+  const cleanName = findOrCreateParticipantKey(rawCleanName);
+
+  if (!extractedData.has(cleanName)) {
+    extractedData.set(cleanName, {
+      rolls: new Set(),
+      firstSeen: now,
+      lastSeen: now
+    });
+  }
+
+  let data = extractedData.get(cleanName);
+  if (data instanceof Set) {
+    data = {
+      rolls: data,
+      firstSeen: now,
+      lastSeen: now
+    };
+    extractedData.set(cleanName, data);
+  }
+
+  data.lastSeen = now;
+  if (extractedRoll) {
+    data.rolls.add(extractedRoll);
+  }
+  return data;
+}
+
+// --- Auto-Open Panels (People & Chat) ---
+function openPeoplePanel() {
+  const selectors = [
+    'button[aria-label*="Show everyone"]',
+    'button[aria-label*="People"]',
+    'button[aria-label*="participants"]',
+    '[data-panel-id="1"]',
+    '[data-tab-id="1"]',
+    '[jsname="nav9Xe"]',
+    '.nI4yAd',
+    '.fdZ55'
+  ];
+  
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el) {
+      const clickTarget = el.closest('button, [role="button"]') || el;
+      if (clickTarget.getAttribute('aria-pressed') !== 'true') {
+        clickTarget.click();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function openChatPanel() {
+  const selectors = [
+    'button[aria-label*="Chat with everyone"]',
+    'button[aria-label*="Chat"]',
+    '[aria-label*="Chat"]',
+    '[aria-label*="chat"]',
+    '[data-panel-id="2"]',
+    '[data-tab-id="2"]',
+    '.VYBDae-Bz112c-RLmnJb'
+  ];
+
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el) {
+      const clickTarget = el.closest('button, [role="button"]') || el;
+      if (clickTarget.getAttribute('aria-pressed') !== 'true') {
+        clickTarget.click();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function autoScanMeeting() {
+  if (!isInActiveCall()) return;
+
+  // 1. Open People panel to load all members in DOM
+  openPeoplePanel();
+  await new Promise(r => setTimeout(r, 400));
+  scanParticipants();
+
+  // Scroll participant container if scrollable
+  const participantElem = document.querySelector('*[data-participant-id], div[role="listitem"]');
+  if (participantElem) {
+    let container = participantElem.parentElement;
+    let attempts = 0;
+    while (container && window.getComputedStyle(container).overflowY === 'visible' && container.parentElement && attempts < 10) {
+      container = container.parentElement;
+      attempts++;
+    }
+    if (container) {
+      container.scrollTop += 300;
+      await new Promise(r => setTimeout(r, 200));
+      scanParticipants();
+    }
+  }
+
+  // 2. Open Chat panel to load all chat roll calls in DOM
+  openChatPanel();
+  await new Promise(r => setTimeout(r, 400));
+  scanChatMessages();
+}
+
+// --- Robust Sender Name Extractor for Chat Messages ---
+function getSenderNameForElement(element) {
+  let curr = element;
+  let depth = 0;
+  
+  while (curr && curr !== document.body && depth < 15) {
+    // 1. Check for explicit sender name element
+    const nameEl = curr.querySelector('.poVWob, .Zs7gze, .zWGUib, [data-sender-name], .pl2yad');
+    if (nameEl && nameEl.textContent) {
+      const text = nameEl.textContent.trim();
+      if (text && !/^\d{1,2}:\d{2}(\s*[ap]m)?$/i.test(text)) {
+        return text;
+      }
+    }
+
+    // 2. Check for sender avatar image alt attribute
+    const imgEl = curr.querySelector('img.nkcAbf[alt], img[alt]');
+    if (imgEl) {
+      const alt = imgEl.getAttribute('alt');
+      if (alt && alt.trim() && !/avatar|profile|photo/i.test(alt.trim())) {
+        return alt.trim();
+      }
+    }
+
+    // 3. Check for data-sender-name attribute
+    const senderAttr = curr.getAttribute('data-sender-name');
+    if (senderAttr && senderAttr.trim()) {
+      return senderAttr.trim();
+    }
+
+    curr = curr.parentElement;
+    depth++;
+  }
+
+  return '';
+}
+
+// --- Main Chat Extraction Scanner ---
 function scanChatMessages() {
-  // Strategy: Find message text nodes first (most distinct), then traverse up to find the associated sender.
-  // This works for both the Sidebar and "Toast" notifications (popup bubbles) which often use the same internal classes but different containers.
-  
-  // .ptNLrf = Message Text Class
-  // [jsname="dTKtvb"] = Alternative Message Text selector
-  const textElements = document.querySelectorAll('.ptNLrf, [jsname="dTKtvb"]');
-  
-  textElements.forEach(textEl => {
-      let name = '';
-      
-      // Traverse up to find a container that includes the name
-      let container = textEl.parentElement;
-      let attempts = 0;
-      const MAX_LEVELS = 8; // Don't go too high to avoid capturing unrelated names
-      
-      while (container && attempts < MAX_LEVELS) {
-          // Check for Name element in this container
-          // .poVWob = Sender Name Class
-          // .Zs7gze = Alternative Name Class
-          const nameEl = container.querySelector('.poVWob, .Zs7gze');
-          
-          if (nameEl) {
-              name = nameEl.textContent.trim();
-              break;
-          }
-          container = container.parentElement;
-          attempts++;
-      }
+  if (!isInActiveCall()) return;
 
-      if (name) {
-          const text = textEl.textContent;
-          const numbers = extractNumbers(text);
-          
-          if (numbers.length > 0) {
-              if (!extractedData.has(name)) {
-                  extractedData.set(name, new Set());
-              }
-              
-              // Add numbers
-              numbers.forEach(num => {
-                  if (!extractedData.get(name).has(num)) {
-                      extractedData.get(name).add(num);
-                  }
-              });
-          }
+  const textElements = document.querySelectorAll('[jsname="dTKtvb"], [data-message-text]');
+  const knownHosts = Array.from(getHostNames());
+  const defaultHostName = knownHosts.length > 0 ? knownHosts[0] : "Meeting Host / Admin";
+  const processedNodes = new Set();
+
+  textElements.forEach(textEl => {
+    const msgContainer = textEl.closest('[jsname="dTKtvb"], [data-message-text]') || textEl;
+    if (processedNodes.has(msgContainer)) return;
+    processedNodes.add(msgContainer);
+
+    let rawName = getSenderNameForElement(msgContainer);
+    let cleanName = cleanParticipantName(rawName);
+
+    // If no participant name was found, only attribute to Host if it's an admin/pinned message banner
+    if (!cleanName) {
+      const isPinnedOrAdminBanner = !!msgContainer.closest('.chmVPb, .Sd72u, [aria-label*="Pin"], button[data-message-id]');
+      if (isPinnedOrAdminBanner) {
+        cleanName = defaultHostName;
       }
+    }
+
+    if (!cleanName) return;
+
+    const text = msgContainer.textContent || '';
+    const numbers = extractNumbers(text);
+    if (numbers.length > 0) {
+      numbers.forEach(num => {
+        recordParticipantState(cleanName, num);
+      });
+    } else {
+      recordParticipantState(cleanName);
+    }
   });
 }
 
-// --- Host Exclusion Logic ---
+// --- Participant List Scanner (Detect Members Joined in Current Meeting) ---
+function scanParticipants() {
+  if (!isInActiveCall()) return;
 
-function getHostNames() {
-    const hosts = new Set();
-    
-    // Search for participants list items
-    const participants = document.querySelectorAll('div[role="listitem"]');
-    
-    participants.forEach(p => {
-        // Check for "Meeting host" text
-        if (p.textContent.includes("Meeting host") || p.innerHTML.includes("Meeting host")) {
-            // Extract Name
-            const nameEl = p.querySelector('.zWGUib');
-            if (nameEl) {
-                hosts.add(nameEl.textContent);
-            } else {
-                // Fallback: aria-label of the listitem often contains the name
-                const ariaLabel = p.getAttribute('aria-label');
-                if (ariaLabel) {
-                    hosts.add(ariaLabel.split(',')[0]); // Simple split just in case
-                }
-            }
-        }
-    });
+  const participantElements = document.querySelectorAll('*[data-participant-id], div[role="listitem"], .cxdMu, .KV1GEc');
+  
+  participantElements.forEach(pEl => {
+    let rawName = '';
+    const nameEl = pEl.querySelector('.zWGUib, .poVWob, .Zs7gze');
+    if (nameEl && nameEl.textContent) {
+      rawName = nameEl.textContent;
+    } else {
+      const ariaLabel = pEl.getAttribute('aria-label');
+      if (ariaLabel) {
+        rawName = ariaLabel.split(',')[0];
+      }
+    }
 
-    // Also try to find "Meeting host" labels directly
-    const hostBadges = document.querySelectorAll('.d93U2d, .qrLqp'); // Classes from snippet
-    hostBadges.forEach(badge => {
-        if (badge.textContent.includes('Meeting host')) {
-            // Traverse up to find the name
-            const container = badge.closest('[role="listitem"]');
-            if (container) {
-                const nameEl = container.querySelector('.zWGUib');
-                if (nameEl) hosts.add(nameEl.textContent);
-            }
-        }
-    });
-    
-    return hosts;
+    const cleanName = cleanParticipantName(rawName);
+    if (!cleanName) return;
+
+    const data = recordParticipantState(cleanName);
+
+    // Extract roll numbers embedded directly in participant's display name
+    const nameRolls = extractNumbers(cleanName);
+    nameRolls.forEach(num => data.rolls.add(num));
+  });
 }
 
-// --- Periodic Scanning ---
+// --- Host Exclusion / Identification Logic ---
+function getHostNames() {
+  const hosts = new Set();
+  const participants = document.querySelectorAll('div[role="listitem"], *[data-participant-id], .cxdMu');
+  
+  participants.forEach(p => {
+    if (p.textContent.includes("Meeting host") || p.innerHTML.includes("Meeting host")) {
+      const nameEl = p.querySelector('.zWGUib, .poVWob, .Zs7gze');
+      if (nameEl) {
+        hosts.add(cleanParticipantName(nameEl.textContent));
+      } else {
+        const ariaLabel = p.getAttribute('aria-label');
+        if (ariaLabel) hosts.add(cleanParticipantName(ariaLabel.split(',')[0]));
+      }
+    }
+  });
 
-// We scan frequently to catch new messages
-setInterval(scanChatMessages, 1000);
+  const hostBadges = document.querySelectorAll('.d93U2d, .qrLqp');
+  hostBadges.forEach(badge => {
+    if (badge.textContent.includes('Meeting host')) {
+      const container = badge.closest('[role="listitem"], *[data-participant-id], .cxdMu');
+      if (container) {
+        const nameEl = container.querySelector('.zWGUib, .poVWob, .Zs7gze');
+        if (nameEl) hosts.add(cleanParticipantName(nameEl.textContent));
+        else {
+          const ariaLabel = container.getAttribute('aria-label');
+          if (ariaLabel) hosts.add(cleanParticipantName(ariaLabel.split(',')[0]));
+        }
+      }
+    }
+  });
+  
+  return hosts;
+}
 
+setInterval(() => {
+  if (!isInActiveCall()) {
+    globalNumbers.clear();
+    strikeZoneNumbers.clear();
+    return;
+  }
+  scanChatMessages();
+  scanParticipants();
+}, 1000);
 
-// --- Download Logic ---
+// --- EXPORT IN FILES (CSV & EXCEL XLS) ---
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 function getMeetingName() {
-    // Try to get meeting name from title or DOM
-    let name = "Meeting";
-    const titleEl = document.querySelector('[data-meeting-title]'); 
-    if (titleEl && titleEl.textContent) {
-        name = titleEl.textContent;
-    } else {
-        name = document.title || "Meeting";
-    }
-    // Clean up the name: remove "Meet - " prefix if present, and other common junk
-    name = name.replace(/^Meet\s*-\s*/i, '').trim();
-    return name;
+  let name = "Meeting";
+  const titleEl = document.querySelector('[data-meeting-title]'); 
+  if (titleEl && titleEl.textContent) {
+    name = titleEl.textContent;
+  } else {
+    name = document.title || "Meeting";
+  }
+  return name.replace(/^Meet\s*-\s*/i, '').trim();
 }
 
-function createDownloadButton() {
-  if (document.getElementById('meet-roll-call-btn')) return;
-
-  const btn = document.createElement('button');
-  btn.id = 'meet-roll-call-btn';
-  btn.className = 'meet-roll-call-btn';
-  btn.innerHTML = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-  `;
-  btn.title = "Download Roll Call";
-  
-  btn.addEventListener('click', async () => {
-      // 1. Check if chat is open
-      const chatContainer = document.querySelector('div[role="log"], div[aria-label="Chat messages"]');
-      const isChatOpen = chatContainer && chatContainer.offsetParent !== null;
-
-      if (!isChatOpen) {
-          // 2. Try to find the chat button
-          // Primary: "Chat with everyone" aria-label
-          let chatBtn = document.querySelector('button[data-panel-id="2"]') // Highly specific from user snippet
-                       || document.querySelector('button[aria-label^="Chat with everyone"]') 
-                       || document.querySelector('button[aria-label="Chat with everyone"]')
-                       || document.querySelector('[data-tooltip="Chat with everyone"]')
-                       || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Chat with everyone'));
-          
-          if (!chatBtn) {
-             // Try to find by icon content 'chat_bubble' if material icons are used as ligatures
-             const icons = document.querySelectorAll('.google-material-icons');
-             for (let icon of icons) {
-                 if (icon.textContent === 'chat_bubble' || icon.textContent === 'chat') {
-                     chatBtn = icon.closest('button');
-                     break;
-                 }
-             }
-          }
-
-          if (chatBtn) {
-              // Open it
-              chatBtn.click();
-              // Wait for DOM to render (3 seconds to be safe for loading history)
-              await new Promise(r => setTimeout(r, 3000)); 
-          } else {
-              console.warn("[RollCall] Could not find Chat button to auto-open.");
-              // Proceed anyway, maybe it was open but selector failed
-          }
-      }
-
-      // 3. Force a scan now that it's likely open
-      scanChatMessages();
-      
-      // 4. Refresh host list 
-      const hosts = getHostNames();
-      
-      // 5. Download
-      downloadCSV(hosts);
-  });
-  
-  document.body.appendChild(btn);
-}
-
-// Helper for download
-function downloadCSV(hosts) {
+function getAttendanceExportData() {
+  const hosts = getHostNames();
   const meetingName = getMeetingName();
-  
-  // Prepare data
   const dataList = [];
   const allRollsSet = new Set();
+  const now = Date.now();
 
-  extractedData.forEach((numbers, name) => {
-    // Filter hosts (Exact match check)
-    if (hosts.has(name)) return;
-    const cleanName = name.replace('(You)', '').trim();
+  extractedData.forEach((data, name) => {
+    const cleanName = cleanParticipantName(name);
     let isHost = false;
+    if (hosts.has(cleanName)) isHost = true;
     hosts.forEach(h => {
-        if (h.replace('(You)', '').trim() === cleanName) isHost = true;
+      if (cleanParticipantName(h) === cleanName) isHost = true;
     });
-    if (isHost) return;
 
-    // Sort individual student numbers naturally
-    const sortedStudentRolls = Array.from(numbers).sort((a, b) => 
-        a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-    );
+    const rolls = data.rolls || (data instanceof Set ? data : new Set());
+    const firstSeen = data.firstSeen || now;
+    const lastSeen = data.lastSeen || now;
+    const durationMs = lastSeen - firstSeen;
 
-    // Join with comma NO SPACE
-    const rollNumbers = sortedStudentRolls.join(',');
-    
-    // Collect for bulk list
-    numbers.forEach(n => allRollsSet.add(n));
+    const firstSeenStr = formatTimeString(firstSeen);
+    const lastSeenStr = formatTimeString(lastSeen);
+    const durationStr = formatDuration(durationMs);
 
-    // Check for multiple entries
-    let notes = "";
-    if (numbers.size > 1) {
-        notes = "⚠️ Multiple Rolls Found";
+    const sortedStudentRolls = Array.from(rolls).sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB) && String(numA) === a && String(numB) === b) {
+        return numA - numB;
+      }
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    // Keep ONLY ONE primary roll number in the Roll Number column
+    const primaryRoll = sortedStudentRolls.length > 0 ? sortedStudentRolls[0] : '';
+    rolls.forEach(n => allRollsSet.add(n));
+
+    let notesArr = [];
+    if (isHost) notesArr.push("Meeting Host / Admin");
+    if (sortedStudentRolls.length > 1) {
+      notesArr.push(`⚠️ Multiple Rolls: ${sortedStudentRolls.join(', ')}`);
     }
+    let notes = notesArr.join(' | ');
 
     dataList.push({
-        name: name,
-        roll: rollNumbers,
-        notes: notes
+      name: cleanName,
+      firstSeen: firstSeenStr,
+      lastSeen: lastSeenStr,
+      duration: durationStr,
+      roll: primaryRoll,
+      notes: notes
     });
   });
 
-  // Sort Rows: Roll Number (Natural Sort) then Name
   dataList.sort((a, b) => {
-      // Use the first roll number for sorting
-      const splitA = a.roll.split(',');
-      const splitB = b.roll.split(',');
-      const valA = splitA[0] || '';
-      const valB = splitB[0] || '';
-      
-      // Natural sort comparison
+    const valA = a.roll.split(',')[0] || '';
+    const valB = b.roll.split(',')[0] || '';
+    if (valA && valB) {
       const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
       if (cmp !== 0) return cmp;
-      
-      return a.name.localeCompare(b.name);
+    } else if (valA && !valB) {
+      return -1;
+    } else if (!valA && valB) {
+      return 1;
+    }
+    return a.name.localeCompare(b.name);
   });
 
-  // Create Bulk String (Natural Sort)
   const allRollsSorted = Array.from(allRollsSet)
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
-      .join(',');
+    .sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB) && String(numA) === a && String(numB) === b) {
+        return numA - numB;
+      }
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    })
+    .join(',');
 
-  // Header
-  // Note: We use CSV now. No styling (highlighting) possible, so we use the Notes column.
-  const rows = [['Serial No.', 'Student Name', 'Roll Number', 'Notes', 'All Roll Numbers (Bulk)']];
+  return { meetingName, dataList, allRollsSorted };
+}
 
-  // Add Rows
-  dataList.forEach((item, index) => {
-      const serial = index + 1;
-      const bulkCell = (index === 0) ? allRollsSorted : ''; // Only first row
-      rows.push([serial, item.name, item.roll, item.notes, bulkCell]);
+function downloadCSV() {
+  const data = getAttendanceExportData();
+  if (data.dataList.length === 0) return;
+
+  const rows = [['Serial No.', 'Student / Member Name', 'Roll Number', 'First Seen (Joined)', 'Last Seen (Active)', 'Time in Meeting (Duration)', 'Notes', 'All Roll Numbers (Comma Separated)']];
+
+  data.dataList.forEach((item, index) => {
+    const serial = index + 1;
+    const bulkCell = (index === 0) ? data.allRollsSorted : '';
+    rows.push([serial, item.name, item.roll, item.firstSeen, item.lastSeen, item.duration, item.notes, bulkCell]);
   });
 
-  // Create CSV content with proper escaping and BOM for Excel
   const csvContent = "\ufeff" + rows.map(e => e.map(field => {
-      let stringField = String(field);
-      // Escape quotes and handle commas
-      if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n')) {
-        stringField = `"${stringField.replace(/"/g, '""')}"`;
-      }
-      return stringField;
-    }).join(",")).join("\n");
-  
-  // Create Download
+    let stringField = String(field);
+    if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n')) {
+      stringField = `"${stringField.replace(/"/g, '""')}"`;
+    }
+    return stringField;
+  }).join(",")).join("\n");
+
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
   const dateStr = new Date().toISOString().slice(0,10);
-  // Sanitize filename more aggressively to avoid weird characters
-  const cleanFileName = meetingName.replace(/[^a-z0-9\-_]/gi, '_').replace(/_+/g, '_');
+  const cleanFileName = data.meetingName.replace(/[^a-z0-9\-_]/gi, '_').replace(/_+/g, '_');
   link.setAttribute("download", `${cleanFileName}_Attendance_${dateStr}.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
@@ -288,7 +751,325 @@ function downloadCSV(hosts) {
   document.body.removeChild(link);
 }
 
-// Initialize button
-setInterval(createDownloadButton, 1000);
+function downloadXLS() {
+  const data = getAttendanceExportData();
+  if (data.dataList.length === 0) return;
 
-console.log("Google Meet Roll Call Extractor Loaded (Class-based)");
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const cleanFileName = data.meetingName.replace(/[^a-z0-9\-_]/gi, '_').replace(/_+/g, '_');
+
+  let excelHTML = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>Attendance Report</x:Name>
+              <x:WorksheetOptions>
+                <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; width: 100%; }
+        th { background-color: #1a73e8; color: #ffffff; font-weight: bold; border: 1px solid #d0d0d0; padding: 10px 14px; text-align: left; font-size: 14px; }
+        td { border: 1px solid #d0d0d0; padding: 8px 14px; font-size: 13px; color: #202124; }
+        tr:nth-child(even) { background-color: #f8f9fa; }
+        .num { text-align: center; font-weight: 600; color: #5f6368; }
+        .notes { color: #d93025; font-weight: 600; }
+        .bulk { font-family: Consolas, monospace; background-color: #e8f0fe; color: #1967d2; font-weight: 600; }
+        .header-box { margin-bottom: 16px; font-family: Arial, sans-serif; }
+        .header-box h2 { color: #1a73e8; margin: 0 0 6px 0; }
+        .header-box p { color: #5f6368; margin: 0; font-size: 13px; }
+      </style>
+    </head>
+    <body>
+      <div class="header-box">
+        <h2>Google Meet Attendance Report - ${escapeHTML(data.meetingName)}</h2>
+        <p><b>Date:</b> ${dateStr} &nbsp;|&nbsp; <b>Total Members Recorded:</b> ${data.dataList.length} &nbsp;|&nbsp; <b>Total Roll Calls:</b> ${data.allRollsSorted ? data.allRollsSorted.split(',').length : 0}</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Serial No.</th>
+            <th>Student / Member Name</th>
+            <th>Roll Number</th>
+            <th>First Seen (Joined)</th>
+            <th>Last Seen (Active)</th>
+            <th>Time in Meeting (Duration)</th>
+            <th>Notes</th>
+            <th>All Roll Numbers (Comma Separated)</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  data.dataList.forEach((item, index) => {
+    const serial = index + 1;
+    const bulkCell = (index === 0) ? data.allRollsSorted : '';
+    excelHTML += `
+      <tr>
+        <td class="num">${serial}</td>
+        <td>${escapeHTML(item.name)}</td>
+        <td>${escapeHTML(item.roll)}</td>
+        <td>${escapeHTML(item.firstSeen)}</td>
+        <td>${escapeHTML(item.lastSeen)}</td>
+        <td>${escapeHTML(item.duration)}</td>
+        <td class="notes">${escapeHTML(item.notes)}</td>
+        <td class="bulk">${escapeHTML(bulkCell)}</td>
+      </tr>
+    `;
+  });
+
+  excelHTML += `
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${cleanFileName}_Attendance_${dateStr}.xls`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// --- GLOBAL MUTATION OBSERVER WITH STRICT CONTAINERS ---
+let activeObserver = null;
+
+function initObserver() {
+  if (activeObserver) return;
+  if (!document.body) return;
+
+  activeObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.target.tagName === 'TEXTAREA' || mutation.target.tagName === 'INPUT') continue;
+
+      if (!isFromValidSource(mutation.target)) continue;
+
+      if (mutation.type === 'childList') {
+        scanParticipants();
+        mutation.addedNodes.forEach(node => {
+          if (!isFromValidSource(node)) return;
+
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            analyzeText(node.innerText || node.textContent);
+          } else if (node.nodeType === Node.TEXT_NODE) {
+            analyzeText(node.nodeValue);
+          }
+        });
+      }
+    }
+  });
+
+  activeObserver.observe(document.body, { childList: true, subtree: true });
+  console.log("%c[Attendance System] Silent Strict Observer Active.", "color: cyan; font-weight: bold;");
+}
+
+// --- INSTANT SILENT INITIALIZATION ---
+function startExtension() {
+  if (window.__meet_attendance_extension_initialized) {
+    initObserver();
+    return;
+  }
+  window.__meet_attendance_extension_initialized = true;
+
+  if (typeof Notification !== 'undefined' && Notification.permission !== "granted" && Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+
+  initObserver();
+  scanChatMessages();
+  scanParticipants();
+  console.log("%c[Attendance System] Silent Background Engine Active.", "color: #00ff00; font-weight: bold;");
+}
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  startExtension();
+} else {
+  document.addEventListener('DOMContentLoaded', startExtension);
+  window.addEventListener('load', startExtension);
+}
+
+setInterval(() => {
+  if (!activeObserver && document.body) {
+    initObserver();
+  }
+}, 1000);
+
+// --- CHROME EXTENSION POPUP MESSAGE & STORAGE LISTENERS ---
+if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'GET_STATUS') {
+      scanChatMessages();
+      scanParticipants();
+      const rollsStr = getAllRollCallsString();
+      const count = rollsStr ? rollsStr.split(',').length : 0;
+      sendResponse({
+        status: 'ok',
+        totalStudents: extractedData.size,
+        rollCallsCount: count,
+        rollsString: rollsStr,
+        patternMode: userSettings.patternMode
+      });
+    } else if (request.action === 'AUTO_SCAN') {
+      autoScanMeeting().then(() => {
+        const rollsStr = getAllRollCallsString();
+        const count = rollsStr ? rollsStr.split(',').length : 0;
+        sendResponse({
+          status: 'ok',
+          totalStudents: extractedData.size,
+          rollCallsCount: count,
+          rollsString: rollsStr
+        });
+      });
+      return true;
+    } else if (request.action === 'COPY_ROLLS') {
+      scanChatMessages();
+      scanParticipants();
+      copyAllRollCallsToClipboard();
+      sendResponse({ status: 'ok', rolls: getAllRollCallsString() });
+    } else if (request.action === 'EXPORT_CSV') {
+      scanChatMessages();
+      scanParticipants();
+      const exportData = getAttendanceExportData();
+      if (!exportData || exportData.dataList.length === 0) {
+        sendResponse({ status: 'empty' });
+      } else {
+        const rows = [['Serial No.', 'Student / Member Name', 'Roll Number', 'First Seen (Joined)', 'Last Seen (Active)', 'Time in Meeting (Duration)', 'Notes', 'All Roll Numbers (Comma Separated)']];
+        exportData.dataList.forEach((item, index) => {
+          const serial = index + 1;
+          const bulkCell = (index === 0) ? exportData.allRollsSorted : '';
+          rows.push([serial, item.name, item.roll, item.firstSeen, item.lastSeen, item.duration, item.notes, bulkCell]);
+        });
+        const csvContent = "\ufeff" + rows.map(e => e.map(field => {
+          let stringField = String(field);
+          if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n')) {
+            stringField = `"${stringField.replace(/"/g, '""')}"`;
+          }
+          return stringField;
+        }).join(",")).join("\n");
+
+        const dateStr = new Date().toISOString().slice(0,10);
+        const cleanFileName = `${exportData.meetingName.replace(/[^a-z0-9\-_]/gi, '_').replace(/_+/g, '_')}_Attendance_${dateStr}.csv`;
+
+        sendResponse({ status: 'ok', content: csvContent, filename: cleanFileName, mimeType: 'text/csv;charset=utf-8;' });
+      }
+    } else if (request.action === 'EXPORT_XLS') {
+      scanChatMessages();
+      scanParticipants();
+      const exportData = getAttendanceExportData();
+      if (!exportData || exportData.dataList.length === 0) {
+        sendResponse({ status: 'empty' });
+      } else {
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const cleanFileName = `${exportData.meetingName.replace(/[^a-z0-9\-_]/gi, '_').replace(/_+/g, '_')}_Attendance_${dateStr}.xls`;
+
+        let excelHTML = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8">
+            <!--[if gte mso 9]>
+            <xml>
+              <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                  <x:ExcelWorksheet>
+                    <x:Name>Attendance Report</x:Name>
+                    <x:WorksheetOptions>
+                      <x:DisplayGridlines/>
+                    </x:WorksheetOptions>
+                  </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+              </x:ExcelWorkbook>
+            </xml>
+            <![endif]-->
+            <style>
+              table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; width: 100%; }
+              th { background-color: #1a73e8; color: #ffffff; font-weight: bold; border: 1px solid #d0d0d0; padding: 10px 14px; text-align: left; font-size: 14px; }
+              td { border: 1px solid #d0d0d0; padding: 8px 14px; font-size: 13px; color: #202124; }
+              tr:nth-child(even) { background-color: #f8f9fa; }
+              .num { text-align: center; font-weight: 600; color: #5f6368; }
+              .notes { color: #d93025; font-weight: 600; }
+              .bulk { font-family: Consolas, monospace; background-color: #e8f0fe; color: #1967d2; font-weight: 600; }
+              .header-box { margin-bottom: 16px; font-family: Arial, sans-serif; }
+              .header-box h2 { color: #1a73e8; margin: 0 0 6px 0; }
+              .header-box p { color: #5f6368; margin: 0; font-size: 13px; }
+            </style>
+          </head>
+          <body>
+            <div class="header-box">
+              <h2>Google Meet Attendance Report - ${escapeHTML(exportData.meetingName)}</h2>
+              <p><b>Date:</b> ${dateStr} &nbsp;|&nbsp; <b>Total Members Recorded:</b> ${exportData.dataList.length} &nbsp;|&nbsp; <b>Total Roll Calls:</b> ${exportData.allRollsSorted ? exportData.allRollsSorted.split(',').length : 0}</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Serial No.</th>
+                  <th>Student / Member Name</th>
+                  <th>Roll Number</th>
+                  <th>First Seen (Joined)</th>
+                  <th>Last Seen (Active)</th>
+                  <th>Time in Meeting (Duration)</th>
+                  <th>Notes</th>
+                  <th>All Roll Numbers (Comma Separated)</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        exportData.dataList.forEach((item, index) => {
+          const serial = index + 1;
+          const bulkCell = (index === 0) ? exportData.allRollsSorted : '';
+          excelHTML += `
+            <tr>
+              <td class="num">${serial}</td>
+              <td>${escapeHTML(item.name)}</td>
+              <td>${escapeHTML(item.roll)}</td>
+              <td>${escapeHTML(item.firstSeen)}</td>
+              <td>${escapeHTML(item.lastSeen)}</td>
+              <td>${escapeHTML(item.duration)}</td>
+              <td class="notes">${escapeHTML(item.notes)}</td>
+              <td class="bulk">${escapeHTML(bulkCell)}</td>
+            </tr>
+          `;
+        });
+
+        excelHTML += `
+              </tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        sendResponse({ status: 'ok', content: excelHTML, filename: cleanFileName, mimeType: 'application/vnd.ms-excel;charset=utf-8;' });
+      }
+    } else if (request.action === 'UPDATE_SETTINGS') {
+      if (request.settings) {
+        userSettings = { ...userSettings, ...request.settings };
+      }
+      sendResponse({ status: 'ok' });
+    }
+    return true;
+  });
+}
+
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.meet_attendance_settings) {
+      userSettings = { ...userSettings, ...changes.meet_attendance_settings.newValue };
+    }
+  });
+}
+
+console.log("Google Meet Roll Call Extractor Silent Engine Loaded.");

@@ -3,16 +3,18 @@
   "name": "Google Meet Roll Call Extractor",
   "version": "1.0",
   "description": "Extracts user names and roll numbers from Google Meet chat.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["https://meet.google.com/*"],
   "content_scripts": [
     {
       "matches": ["https://meet.google.com/*"],
       "js": ["content.js"],
-      "css": ["style.css"]
+      "css": ["style.css"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_title": "Download Roll Call"
+    "default_popup": "popup.html",
+    "default_title": "Google Meet Auto-Attendance Radar"
   }
 }
