@@ -69,10 +69,18 @@
 
     <!-- Pattern Mode Toggle (30s Window) -->
     <div class="section-card">
-      <div class="section-title">🔀 Attendance Pattern Mode (30s Window)</div>
-      <button class="btn btn-pattern-toggle sequential" id="pattern-toggle-btn">
-        🔢 Sequential Mode (52, 53, 54...)
-      </button>
+      <div class="pattern-header-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <span class="section-title" style="margin: 0;">🔀 Attendance Pattern Mode (30s Window)</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="popup-pattern-enable-toggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div id="pattern-mode-controls">
+        <button class="btn btn-pattern-toggle sequential" id="pattern-toggle-btn">
+          🔢 Sequential Mode (52, 53, 54...)
+        </button>
+      </div>
     </div>
 
     <!-- Auto-Attendance Settings -->

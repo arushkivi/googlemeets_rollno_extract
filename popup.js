@@ -7,6 +7,7 @@ let currentSettings = {
   enableSound: true,
   enablePopup: true,
   enableAutoAdmit: false,
+  enablePatternMode: true,
   patternMode: 'sequential'
 };
 
@@ -53,7 +54,7 @@ async function refreshTabStatus() {
                 if (retryResp && retryResp.status === 'ok') {
                   document.getElementById('stat-students').textContent = retryResp.totalStudents || 0;
                   document.getElementById('stat-rolls').textContent = retryResp.rollCallsCount || 0;
-                  if (retryResp.patternMode) updatePatternUI(retryResp.patternMode);
+                  if (retryResp.patternMode) updatePatternUI(retryResp.patternMode, retryResp.enablePatternMode);
                 }
               });
             });
@@ -64,7 +65,7 @@ async function refreshTabStatus() {
           document.getElementById('stat-students').textContent = response.totalStudents || 0;
           document.getElementById('stat-rolls').textContent = response.rollCallsCount || 0;
           if (response.patternMode) {
-            updatePatternUI(response.patternMode);
+            updatePatternUI(response.patternMode, response.enablePatternMode);
           }
         }
       });
@@ -78,8 +79,21 @@ async function refreshTabStatus() {
 }
 
 // Update Pattern Mode UI
-function updatePatternUI(mode) {
+function updatePatternUI(mode, enabled = currentSettings.enablePatternMode) {
   currentSettings.patternMode = mode;
+  currentSettings.enablePatternMode = enabled !== undefined ? enabled : true;
+
+  const enableToggle = document.getElementById('popup-pattern-enable-toggle');
+  if (enableToggle) {
+    enableToggle.checked = !!currentSettings.enablePatternMode;
+  }
+
+  const controls = document.getElementById('pattern-mode-controls');
+  if (controls) {
+    controls.style.opacity = currentSettings.enablePatternMode ? '1' : '0.4';
+    controls.style.pointerEvents = currentSettings.enablePatternMode ? 'auto' : 'none';
+  }
+
   const btn = document.getElementById('pattern-toggle-btn');
   if (!btn) return;
 
@@ -107,7 +121,7 @@ function loadSavedSettings() {
       document.getElementById('popup-modal-toggle').checked = currentSettings.enablePopup;
       const admitToggle = document.getElementById('popup-autoadmit-toggle');
       if (admitToggle) admitToggle.checked = !!currentSettings.enableAutoAdmit;
-      updatePatternUI(currentSettings.patternMode);
+      updatePatternUI(currentSettings.patternMode, currentSettings.enablePatternMode);
     });
   }
 }
@@ -124,6 +138,8 @@ async function saveSettings() {
   const popupOn = document.getElementById('popup-modal-toggle').checked;
   const admitToggle = document.getElementById('popup-autoadmit-toggle');
   const admitOn = admitToggle ? admitToggle.checked : false;
+  const patternEnableToggle = document.getElementById('popup-pattern-enable-toggle');
+  const patternEnabled = patternEnableToggle ? patternEnableToggle.checked : true;
 
   currentSettings = {
     ...currentSettings,
@@ -132,7 +148,8 @@ async function saveSettings() {
     strikeMax: maxVal,
     enableSound: soundOn,
     enablePopup: popupOn,
-    enableAutoAdmit: admitOn
+    enableAutoAdmit: admitOn,
+    enablePatternMode: patternEnabled
   };
 
   chrome.storage.local.set({ meet_attendance_settings: currentSettings }, () => {
@@ -261,6 +278,16 @@ document.addEventListener('DOMContentLoaded', () => {
     autoadmitToggle.onchange = () => {
       saveSettings();
       showPopupToast(autoadmitToggle.checked ? "⚡ Auto-Admit Enabled!" : "⚡ Auto-Admit Disabled!");
+    };
+  }
+
+  // Pattern Mode enable/disable toggle listener
+  const patternEnableToggle = document.getElementById('popup-pattern-enable-toggle');
+  if (patternEnableToggle) {
+    patternEnableToggle.onchange = () => {
+      updatePatternUI(currentSettings.patternMode, patternEnableToggle.checked);
+      saveSettings();
+      showPopupToast(patternEnableToggle.checked ? "🔀 Pattern Mode Enabled!" : "🔀 Pattern Mode Disabled!");
     };
   }
 });

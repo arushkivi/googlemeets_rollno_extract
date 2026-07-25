@@ -13,6 +13,7 @@ let userSettings = {
   enableSound: true,
   enablePopup: false,
   enableAutoAdmit: false,
+  enablePatternMode: true,
   patternMode: 'sequential' // 'sequential' or 'scrambled'
 };
 
@@ -256,7 +257,7 @@ function analyzeText(text) {
     return;
   }
 
-  if (cleanText.length < 60) {
+  if (userSettings.enablePatternMode && cleanText.length < 60) {
     const digitsFound = cleanText.match(/\b\d+\b/g);
     
     if (digitsFound) {
@@ -953,7 +954,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
         totalStudents: extractedData.size,
         rollCallsCount: count,
         rollsString: rollsStr,
-        patternMode: userSettings.patternMode
+        patternMode: userSettings.patternMode,
+        enablePatternMode: userSettings.enablePatternMode
       });
     } else if (request.action === 'AUTO_SCAN') {
       autoScanMeeting().then(() => {
