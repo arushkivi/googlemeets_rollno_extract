@@ -45,6 +45,19 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
           Copy All Roll Calls (1,2,3,4)
         </button>
+        <div class="form-group" style="margin: 4px 0;">
+          <label for="popup-export-sort" style="color: #bdc1c6; font-weight: 700;">📊 Report Sort Order:</label>
+          <select id="popup-export-sort" class="select-input">
+            <option value="roll_asc">🔢 Roll Number (Ascending: 1 → 100)</option>
+            <option value="roll_desc">🔢 Roll Number (Descending: 100 → 1)</option>
+            <option value="duration_desc">⏱️ Meeting Duration (Longest → Shortest)</option>
+            <option value="duration_asc">⏱️ Meeting Duration (Shortest → Longest)</option>
+            <option value="name_asc">👤 Student Name (A → Z)</option>
+            <option value="name_desc">👤 Student Name (Z → A)</option>
+            <option value="joined_asc">🕒 Joined Time (Earliest First)</option>
+            <option value="joined_desc">🕒 Joined Time (Latest First)</option>
+          </select>
+        </div>
         <div class="export-row">
           <button class="btn btn-primary" id="btn-export-csv">
             📥 Export CSV (.csv)

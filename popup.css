@@ -246,17 +246,27 @@ body {
 }
 
 .form-group input[type="text"],
-.form-group input[type="number"] {
+.form-group input[type="number"],
+.select-input {
   padding: 8px 10px;
   border-radius: 6px;
   background: #1c1d20;
   border: 1px solid #3c4043;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
   outline: none;
+  cursor: pointer;
 }
 
-.form-group input:focus {
+.select-input option {
+  background: #242629;
+  color: #ffffff;
+  padding: 6px;
+}
+
+.form-group input:focus,
+.select-input:focus {
   border-color: #8ab4f8;
 }
 

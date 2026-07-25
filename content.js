@@ -192,6 +192,11 @@ function isInActiveCall() {
 function triggerAttendanceAlert(title, reason, type = 'urgent', matchedKeyword = null) {
   if (!isInActiveCall()) return;
 
+  // Strictly suppress pattern radar alerts when Pattern Mode is disabled
+  if (!userSettings.enablePatternMode && (title.includes("STRIKE") || title.includes("Radar Active"))) {
+    return;
+  }
+
   const now = Date.now();
   if (type === 'urgent' && now - lastSentTime < userSettings.cooldownTime) return; 
   if (type === 'warning' && now - lastWarningTime < userSettings.warningCooldown) return;
@@ -257,16 +262,20 @@ function analyzeText(text) {
     return;
   }
 
+  // Pattern Mode Radar Analysis
   if (userSettings.enablePatternMode && cleanText.length < 60) {
     const digitsFound = cleanText.match(/\b\d+\b/g);
     
     if (digitsFound) {
+      const sMin = parseInt(userSettings.strikeMin, 10);
+      const sMax = parseInt(userSettings.strikeMax, 10);
+
       digitsFound.forEach(digit => {
         let val = parseInt(digit, 10);
         if (val > 0 && val <= 150) {
           globalNumbers.add(val);
           
-          if (val >= userSettings.strikeMin && val <= userSettings.strikeMax) {
+          if (!isNaN(sMin) && !isNaN(sMax) && val >= sMin && val <= sMax) {
             strikeZoneNumbers.add(val);
           }
         }
@@ -300,6 +309,9 @@ function analyzeText(text) {
         }
       }
     }
+  } else if (!userSettings.enablePatternMode) {
+    globalNumbers.clear();
+    strikeZoneNumbers.clear();
   }
 }
 
@@ -309,6 +321,9 @@ function cleanParticipantName(rawName) {
   return rawName
     .replace(/\(You\)/gi, '')
     .replace(/Meeting host/gi, '')
+    .replace(/\b\d{1,2}:\d{2}\s*(AM|PM)?\b/gi, '')
+    .replace(/microphone\s+(off|on|muted)/gi, '')
+    .replace(/video\s+(off|on)/gi, '')
     .replace(/keepPin|keep pin|pin|unmute|mute|microphone|mic|more_vert|keyboard_arrow_down|keyboard_arrow/gi, '')
     .replace(/[\n\r\t]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -546,28 +561,67 @@ function scanChatMessages() {
 function scanParticipants() {
   if (!isInActiveCall()) return;
 
-  const participantElements = document.querySelectorAll('*[data-participant-id], div[role="listitem"], .cxdMu, .KV1GEc');
+  // 1. Scan participant side panel & video tile containers
+  const participantElements = document.querySelectorAll(
+    '*[data-participant-id], *[data-requested-participant-id], div[role="listitem"], ' +
+    'div[data-self-name], div[data-name], .cxdMu, .KV1GEc, .pjv25, .l425fd, .S1s5ce, .Q8T12e'
+  );
   
   participantElements.forEach(pEl => {
     let rawName = '';
-    const nameEl = pEl.querySelector('.zWGUib, .poVWob, .Zs7gze');
-    if (nameEl && nameEl.textContent) {
-      rawName = nameEl.textContent;
-    } else {
+
+    // Check data-self-name or data-name attributes directly on container
+    if (pEl.hasAttribute('data-self-name')) {
+      rawName = pEl.getAttribute('data-self-name');
+    } else if (pEl.hasAttribute('data-name')) {
+      rawName = pEl.getAttribute('data-name');
+    }
+
+    // Check inner text element candidates
+    if (!rawName) {
+      const nameEl = pEl.querySelector('.zWGUib, .poVWob, .Zs7gze, .Xw370c, .DWv25b, .Yvsevd, span[dir="auto"]');
+      if (nameEl && nameEl.textContent) {
+        rawName = nameEl.textContent;
+      }
+    }
+
+    // Check avatar image alt attribute
+    if (!rawName) {
+      const imgEl = pEl.querySelector('img[alt]');
+      if (imgEl) {
+        const alt = imgEl.getAttribute('alt');
+        if (alt && alt.trim() && !/avatar|profile|photo|picture/i.test(alt.trim())) {
+          rawName = alt.trim();
+        }
+      }
+    }
+
+    // Check aria-label attribute
+    if (!rawName) {
       const ariaLabel = pEl.getAttribute('aria-label');
-      if (ariaLabel) {
+      if (ariaLabel && !/video|button|mute|pin|more|options|controls/i.test(ariaLabel)) {
         rawName = ariaLabel.split(',')[0];
       }
     }
 
     const cleanName = cleanParticipantName(rawName);
-    if (!cleanName) return;
+    if (!cleanName || cleanName.length < 2) return;
 
     const data = recordParticipantState(cleanName);
 
     // Extract roll numbers embedded directly in participant's display name
     const nameRolls = extractNumbers(cleanName);
     nameRolls.forEach(num => data.rolls.add(num));
+  });
+
+  // 2. Scan all standalone participant name labels across Google Meet
+  const standaloneNameEls = document.querySelectorAll('.zWGUib, .poVWob, .Zs7gze, .Xw370c, div[data-self-name]');
+  standaloneNameEls.forEach(el => {
+    let rawName = el.getAttribute('data-self-name') || el.textContent || '';
+    const cleanName = cleanParticipantName(rawName);
+    if (cleanName && cleanName.length >= 2 && !/chat|everyone|people|details|in call|meeting host/i.test(cleanName)) {
+      recordParticipantState(cleanName);
+    }
   });
 }
 
@@ -669,7 +723,20 @@ function getMeetingName() {
   return name.replace(/^Meet\s*-\s*/i, '').trim();
 }
 
-function getAttendanceExportData() {
+function getSortLabel(sortBy) {
+  switch(sortBy) {
+    case 'roll_desc': return 'Roll Number (Descending)';
+    case 'duration_desc': return 'Meeting Duration (Longest First)';
+    case 'duration_asc': return 'Meeting Duration (Shortest First)';
+    case 'name_asc': return 'Student Name (A to Z)';
+    case 'name_desc': return 'Student Name (Z to A)';
+    case 'joined_asc': return 'Joined Time (Earliest First)';
+    case 'joined_desc': return 'Joined Time (Latest First)';
+    default: return 'Roll Number (Ascending)';
+  }
+}
+
+function getAttendanceExportData(sortBy = 'roll_asc') {
   const hosts = getHostNames();
   const meetingName = getMeetingName();
   const dataList = [];
@@ -718,23 +785,47 @@ function getAttendanceExportData() {
       firstSeen: firstSeenStr,
       lastSeen: lastSeenStr,
       duration: durationStr,
+      durationMs: durationMs,
+      firstSeenMs: firstSeen,
       roll: primaryRoll,
       notes: notes
     });
   });
 
+  // Dynamic Multi-Criterion Sorting
   dataList.sort((a, b) => {
-    const valA = a.roll.split(',')[0] || '';
-    const valB = b.roll.split(',')[0] || '';
-    if (valA && valB) {
-      const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
-      if (cmp !== 0) return cmp;
-    } else if (valA && !valB) {
-      return -1;
-    } else if (!valA && valB) {
-      return 1;
+    if (sortBy === 'duration_desc') {
+      return b.durationMs - a.durationMs;
+    } else if (sortBy === 'duration_asc') {
+      return a.durationMs - b.durationMs;
+    } else if (sortBy === 'name_asc') {
+      return a.name.localeCompare(b.name);
+    } else if (sortBy === 'name_desc') {
+      return b.name.localeCompare(a.name);
+    } else if (sortBy === 'joined_asc') {
+      return a.firstSeenMs - b.firstSeenMs;
+    } else if (sortBy === 'joined_desc') {
+      return b.firstSeenMs - a.firstSeenMs;
+    } else if (sortBy === 'roll_desc') {
+      const valA = a.roll ? parseInt(a.roll, 10) : -1;
+      const valB = b.roll ? parseInt(b.roll, 10) : -1;
+      if (!isNaN(valA) && !isNaN(valB) && valA !== -1 && valB !== -1) {
+        return valB - valA;
+      }
+      return b.roll.localeCompare(a.roll, undefined, { numeric: true });
+    } else {
+      // Default: roll_asc
+      const valA = a.roll ? parseInt(a.roll, 10) : 999999;
+      const valB = b.roll ? parseInt(b.roll, 10) : 999999;
+      if (!isNaN(valA) && !isNaN(valB) && valA !== 999999 && valB !== 999999) {
+        if (valA !== valB) return valA - valB;
+      } else if (valA !== 999999 && valB === 999999) {
+        return -1;
+      } else if (valA === 999999 && valB !== 999999) {
+        return 1;
+      }
+      return a.name.localeCompare(b.name);
     }
-    return a.name.localeCompare(b.name);
   });
 
   const allRollsSorted = Array.from(allRollsSet)
@@ -751,8 +842,8 @@ function getAttendanceExportData() {
   return { meetingName, dataList, allRollsSorted };
 }
 
-function downloadCSV() {
-  const data = getAttendanceExportData();
+function downloadCSV(sortBy = 'roll_asc') {
+  const data = getAttendanceExportData(sortBy);
   if (data.dataList.length === 0) return;
 
   const rows = [['Serial No.', 'Student / Member Name', 'Roll Number', 'First Seen (Joined)', 'Last Seen (Active)', 'Time in Meeting (Duration)', 'Notes', 'All Roll Numbers (Comma Separated)']];
@@ -784,8 +875,8 @@ function downloadCSV() {
   document.body.removeChild(link);
 }
 
-function downloadXLS() {
-  const data = getAttendanceExportData();
+function downloadXLS(sortBy = 'roll_asc') {
+  const data = getAttendanceExportData(sortBy);
   if (data.dataList.length === 0) return;
 
   const dateStr = new Date().toISOString().slice(0, 10);
@@ -810,22 +901,25 @@ function downloadXLS() {
       </xml>
       <![endif]-->
       <style>
-        table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; width: 100%; }
-        th { background-color: #1a73e8; color: #ffffff; font-weight: bold; border: 1px solid #d0d0d0; padding: 10px 14px; text-align: left; font-size: 14px; }
-        td { border: 1px solid #d0d0d0; padding: 8px 14px; font-size: 13px; color: #202124; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background-color: #ffffff; color: #202124; }
+        .header-card { background: #1a73e8; color: #ffffff; padding: 18px 24px; border-radius: 10px; margin-bottom: 20px; }
+        .header-card h2 { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; }
+        .header-card p { margin: 0; font-size: 13px; opacity: 0.95; }
+        table { border-collapse: collapse; width: 100%; font-size: 13px; }
+        th { background-color: #1565c0; color: #ffffff; font-weight: 700; border: 1px solid #d0d0d0; padding: 10px 14px; text-align: left; font-size: 13px; }
+        td { border: 1px solid #e0e0e0; padding: 9px 14px; font-size: 13px; color: #202124; }
         tr:nth-child(even) { background-color: #f8f9fa; }
-        .num { text-align: center; font-weight: 600; color: #5f6368; }
-        .notes { color: #d93025; font-weight: 600; }
-        .bulk { font-family: Consolas, monospace; background-color: #e8f0fe; color: #1967d2; font-weight: 600; }
-        .header-box { margin-bottom: 16px; font-family: Arial, sans-serif; }
-        .header-box h2 { color: #1a73e8; margin: 0 0 6px 0; }
-        .header-box p { color: #5f6368; margin: 0; font-size: 13px; }
+        .num { text-align: center; font-weight: 700; color: #1a73e8; }
+        .name { font-weight: 600; color: #202124; }
+        .duration-badge { font-weight: 700; color: #1967d2; text-align: center; }
+        .notes-badge { color: #d93025; font-weight: 600; }
+        .bulk { font-family: Consolas, monospace; background-color: #f1f3f4; color: #3c4043; font-weight: 600; padding: 6px 10px; }
       </style>
     </head>
     <body>
-      <div class="header-box">
-        <h2>Google Meet Attendance Report - ${escapeHTML(data.meetingName)}</h2>
-        <p><b>Date:</b> ${dateStr} &nbsp;|&nbsp; <b>Total Members Recorded:</b> ${data.dataList.length} &nbsp;|&nbsp; <b>Total Roll Calls:</b> ${data.allRollsSorted ? data.allRollsSorted.split(',').length : 0}</p>
+      <div class="header-card">
+        <h2>Google Meet Attendance Report — ${escapeHTML(data.meetingName)}</h2>
+        <p><b>Date:</b> ${dateStr} &nbsp;|&nbsp; <b>Total Members:</b> ${data.dataList.length} &nbsp;|&nbsp; <b>Total Roll Calls:</b> ${data.allRollsSorted ? data.allRollsSorted.split(',').length : 0} &nbsp;|&nbsp; <b>Sorted By:</b> ${getSortLabel(sortBy)}</p>
       </div>
       <table>
         <thead>
@@ -849,12 +943,12 @@ function downloadXLS() {
     excelHTML += `
       <tr>
         <td class="num">${serial}</td>
-        <td>${escapeHTML(item.name)}</td>
-        <td>${escapeHTML(item.roll)}</td>
+        <td class="name">${escapeHTML(item.name)}</td>
+        <td class="num">${escapeHTML(item.roll)}</td>
         <td>${escapeHTML(item.firstSeen)}</td>
         <td>${escapeHTML(item.lastSeen)}</td>
-        <td>${escapeHTML(item.duration)}</td>
-        <td class="notes">${escapeHTML(item.notes)}</td>
+        <td class="duration-badge">${escapeHTML(item.duration)}</td>
+        <td class="notes-badge">${escapeHTML(item.notes)}</td>
         <td class="bulk">${escapeHTML(bulkCell)}</td>
       </tr>
     `;
@@ -977,7 +1071,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     } else if (request.action === 'EXPORT_CSV') {
       scanChatMessages();
       scanParticipants();
-      const exportData = getAttendanceExportData();
+      const sortBy = request.sortBy || 'roll_asc';
+      const exportData = getAttendanceExportData(sortBy);
       if (!exportData || exportData.dataList.length === 0) {
         sendResponse({ status: 'empty' });
       } else {
@@ -1003,7 +1098,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
     } else if (request.action === 'EXPORT_XLS') {
       scanChatMessages();
       scanParticipants();
-      const exportData = getAttendanceExportData();
+      const sortBy = request.sortBy || 'roll_asc';
+      const exportData = getAttendanceExportData(sortBy);
       if (!exportData || exportData.dataList.length === 0) {
         sendResponse({ status: 'empty' });
       } else {
@@ -1029,22 +1125,26 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
             </xml>
             <![endif]-->
             <style>
-              table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; width: 100%; }
-              th { background-color: #1a73e8; color: #ffffff; font-weight: bold; border: 1px solid #d0d0d0; padding: 10px 14px; text-align: left; font-size: 14px; }
-              td { border: 1px solid #d0d0d0; padding: 8px 14px; font-size: 13px; color: #202124; }
+              body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background-color: #ffffff; color: #202124; }
+              .header-card { background: #1a73e8; color: #ffffff; padding: 18px 24px; border-radius: 10px; margin-bottom: 20px; }
+              .header-card h2 { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; }
+              .header-card p { margin: 0; font-size: 13px; opacity: 0.95; }
+              table { border-collapse: collapse; width: 100%; font-size: 13px; }
+              th { background-color: #1565c0; color: #ffffff; font-weight: 700; border: 1px solid #d0d0d0; padding: 10px 14px; text-align: left; font-size: 13px; }
+              td { border: 1px solid #e0e0e0; padding: 9px 14px; font-size: 13px; color: #202124; }
               tr:nth-child(even) { background-color: #f8f9fa; }
-              .num { text-align: center; font-weight: 600; color: #5f6368; }
-              .notes { color: #d93025; font-weight: 600; }
-              .bulk { font-family: Consolas, monospace; background-color: #e8f0fe; color: #1967d2; font-weight: 600; }
-              .header-box { margin-bottom: 16px; font-family: Arial, sans-serif; }
-              .header-box h2 { color: #1a73e8; margin: 0 0 6px 0; }
-              .header-box p { color: #5f6368; margin: 0; font-size: 13px; }
+              tr:hover { background-color: #f1f3f4; }
+              .num { text-align: center; font-weight: 700; color: #1a73e8; }
+              .name { font-weight: 600; color: #202124; }
+              .duration-badge { font-weight: 700; color: #1967d2; text-align: center; }
+              .notes-badge { color: #d93025; font-weight: 600; }
+              .bulk { font-family: Consolas, monospace; background-color: #f1f3f4; color: #3c4043; font-weight: 600; padding: 6px 10px; }
             </style>
           </head>
           <body>
-            <div class="header-box">
-              <h2>Google Meet Attendance Report - ${escapeHTML(exportData.meetingName)}</h2>
-              <p><b>Date:</b> ${dateStr} &nbsp;|&nbsp; <b>Total Members Recorded:</b> ${exportData.dataList.length} &nbsp;|&nbsp; <b>Total Roll Calls:</b> ${exportData.allRollsSorted ? exportData.allRollsSorted.split(',').length : 0}</p>
+            <div class="header-card">
+              <h2>Google Meet Attendance Report — ${escapeHTML(exportData.meetingName)}</h2>
+              <p><b>Date:</b> ${dateStr} &nbsp;|&nbsp; <b>Total Members:</b> ${exportData.dataList.length} &nbsp;|&nbsp; <b>Total Roll Calls:</b> ${exportData.allRollsSorted ? exportData.allRollsSorted.split(',').length : 0} &nbsp;|&nbsp; <b>Sorted By:</b> ${getSortLabel(sortBy)}</p>
             </div>
             <table>
               <thead>
@@ -1068,12 +1168,12 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
           excelHTML += `
             <tr>
               <td class="num">${serial}</td>
-              <td>${escapeHTML(item.name)}</td>
-              <td>${escapeHTML(item.roll)}</td>
+              <td class="name">${escapeHTML(item.name)}</td>
+              <td class="num">${escapeHTML(item.roll)}</td>
               <td>${escapeHTML(item.firstSeen)}</td>
               <td>${escapeHTML(item.lastSeen)}</td>
-              <td>${escapeHTML(item.duration)}</td>
-              <td class="notes">${escapeHTML(item.notes)}</td>
+              <td class="duration-badge">${escapeHTML(item.duration)}</td>
+              <td class="notes-badge">${escapeHTML(item.notes)}</td>
               <td class="bulk">${escapeHTML(bulkCell)}</td>
             </tr>
           `;

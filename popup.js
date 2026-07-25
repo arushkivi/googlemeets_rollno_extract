@@ -210,14 +210,16 @@ async function handleTabResponse(action, response) {
 }
 
 // Send Action to Content Script with Auto-Injection Fallback
-async function sendTabMessage(action) {
+async function sendTabMessage(action, extraParams = {}) {
   const tab = await getActiveMeetTab();
   if (!tab) {
     showPopupToast("⚠️ Please open Google Meet tab first!");
     return;
   }
 
-  chrome.tabs.sendMessage(tab.id, { action: action }, async (response) => {
+  const payload = { action: action, ...extraParams };
+
+  chrome.tabs.sendMessage(tab.id, payload, async (response) => {
     if (chrome.runtime.lastError || !response) {
       // Auto-inject content script if tab was not previously connected
       try {
@@ -226,7 +228,7 @@ async function sendTabMessage(action) {
           files: ['content.js']
         });
         setTimeout(() => {
-          chrome.tabs.sendMessage(tab.id, { action: action }, (retryResp) => {
+          chrome.tabs.sendMessage(tab.id, payload, (retryResp) => {
             if (chrome.runtime.lastError || !retryResp) {
               showPopupToast("⚠️ Please refresh the Google Meet tab once!");
             } else {
@@ -266,8 +268,14 @@ document.addEventListener('DOMContentLoaded', () => {
     sendTabMessage('AUTO_SCAN');
   };
   document.getElementById('btn-copy-rolls').onclick = () => sendTabMessage('COPY_ROLLS');
-  document.getElementById('btn-export-csv').onclick = () => sendTabMessage('EXPORT_CSV');
-  document.getElementById('btn-export-xls').onclick = () => sendTabMessage('EXPORT_XLS');
+  document.getElementById('btn-export-csv').onclick = () => {
+    const sortVal = document.getElementById('popup-export-sort')?.value || 'roll_asc';
+    sendTabMessage('EXPORT_CSV', { sortBy: sortVal });
+  };
+  document.getElementById('btn-export-xls').onclick = () => {
+    const sortVal = document.getElementById('popup-export-sort')?.value || 'roll_asc';
+    sendTabMessage('EXPORT_XLS', { sortBy: sortVal });
+  };
 
   // Save settings button
   document.getElementById('btn-save-settings').onclick = () => saveSettings();
